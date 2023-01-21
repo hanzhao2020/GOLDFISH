@@ -6,17 +6,17 @@ class ComplianceExOperation(object):
     derivatives of compliacne w.r.t. displacements and control points
     both in IGA DoFs.
     """
-    def __init__(self, nonmatching_opt, force):
+    def __init__(self, nonmatching_opt, forces):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
-        self.force = force
+        self.forces = forces
 
         self.c_forms = []
         self.dcpldu_forms = []
         for s_ind in range(self.num_splines):
-            cpl_sub = inner(self.force, 
+            cpl_sub = inner(self.forces[s_ind], 
                     self.nonmatching_opt.spline_funcs[s_ind])\
                     *self.splines[s_ind].dx
             self.c_forms += [cpl_sub]
@@ -71,7 +71,8 @@ if __name__ == '__main__':
     # from GOLDFISH.tests.test_slr import nonmatching_opt
 
     force = as_vector([Constant(0.), Constant(0.), Constant(1.)])
-    cpl_op = ComplianceExOperation(nonmatching_opt, force)
+    forces = [force for i in range(nonmatching_opt.num_splines)]
+    cpl_op = ComplianceExOperation(nonmatching_opt, forces)
 
     vec0 = np.ones(cpl_op.nonmatching_opt.vec_iga_dof)
     vec1 = np.ones(cpl_op.nonmatching_opt.vec_iga_dof)

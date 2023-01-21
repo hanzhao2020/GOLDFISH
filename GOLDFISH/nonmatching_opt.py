@@ -133,7 +133,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         dRm_dcpm_single_field = [None for i in range(self.num_intersections)]
         for i in range(self.num_intersections):
-            dRm_dcpm_temp = dRmdcpm_sub(self.Rm_form_list[i],
+            dRm_dcpm_temp = dRmdcpm_sub(self.Rm_symexp_list[i],
                             self.mortar_cpfuncs[i], field)
             dRm_dcpm_temp_to_assemble = [[[[Form(dRm_dcpm_ijkl) 
                                             if dRm_dcpm_ijkl is not None 
