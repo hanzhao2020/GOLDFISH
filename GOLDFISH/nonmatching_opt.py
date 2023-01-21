@@ -127,7 +127,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         init_cp_iga = np.array(init_cp_iga).T
         return init_cp_iga
 
-    def mortar_dRmdCPm_forms(self, field):
+    def mortar_dRmdCPm_symexp(self, field):
         """
         Create dolfin forms of ``dRmdCPm`` for all intersections.
         """
@@ -151,18 +151,18 @@ class NonMatchingOpt(NonMatchingCoupling):
         NonMatchingCoupling.mortar_meshes_setup(self, 
                             mapping_list, mortar_parametric_coords, 
                             penalty_coefficient, penalty_method)
-        self.dRm_dcpm_list = [self.mortar_dRmdCPm_forms(field) 
+        self.dRm_dcpm_list = [self.mortar_dRmdCPm_symexp(field) 
                               for field in self.opt_field]
 
     def set_residuals(self, residuals, residuals_deriv=None):
         NonMatchingCoupling.set_residuals(self, residuals, residuals_deriv)
-        dR_dcp_ufl_forms = [[] for field in self.opt_field]
+        dR_dcp_ufl_symexp = [[] for field in self.opt_field]
         for i, field in enumerate(self.opt_field):
             for s_ind in range(self.num_splines):
-                dR_dcp_ufl_forms[i] += [derivative(residuals[s_ind], 
+                dR_dcp_ufl_symexp[i] += [derivative(residuals[s_ind], 
                                    self.splines[s_ind].cpFuncs[field]),]
-        self.dR_dcp_forms = [[Form(dRdcp) for dRdcp in dR_dcp_single_field]
-                             for dR_dcp_single_field in dR_dcp_ufl_forms]
+        self.dR_dcp_symexp = [[Form(dRdcp) for dRdcp in dR_dcp_single_field]
+                             for dR_dcp_single_field in dR_dcp_ufl_symexp]
 
     def vec_IGA2FE(self, v_iga, v_fe, s_ind):
         """
@@ -415,7 +415,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         field_ind = self.opt_field.index(field)
         dR_dcp_FE = []
         for i in range(self.num_splines):
-            dR_dcp_assemble = assemble(self.dR_dcp_forms[field_ind][i])
+            dR_dcp_assemble = assemble(self.dR_dcp_symexp[field_ind][i])
             dR_dcp_FE += [m2p(dR_dcp_assemble),]
 
         ## Step 2: assemble non-matching contributions
