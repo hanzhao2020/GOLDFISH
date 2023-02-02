@@ -8,3 +8,4 @@ from GOLDFISH.openmdao_comps.cpffd_regu_comp import *
 from GOLDFISH.openmdao_comps.disp_states_comp import *
 from GOLDFISH.openmdao_comps.ffd2surf_comp import *
 from GOLDFISH.openmdao_comps.int_energy_comp import *
+from GOLDFISH.openmdao_comps.volume_comp import *

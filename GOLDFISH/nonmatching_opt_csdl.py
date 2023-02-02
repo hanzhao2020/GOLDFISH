@@ -8,3 +8,4 @@ from GOLDFISH.csdl_models.cpffd_regu_model import *
 from GOLDFISH.csdl_models.disp_states_model import *
 from GOLDFISH.csdl_models.ffd2surf_model import *
 from GOLDFISH.csdl_models.int_energy_model import *
+from GOLDFISH.csdl_models.volume_model import *

@@ -17,7 +17,6 @@ class VolumeExOperation(object):
             vol = self.nonmatching_opt.h_th[s_ind]*self.splines[s_ind].dx
             self.vol_forms += [vol]
 
-
         if thickness_deriv is True:
             self.dvoldu_forms = []
             for s_ind in range(self.num_splines):
