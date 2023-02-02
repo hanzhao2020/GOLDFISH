@@ -5,7 +5,7 @@ from csdl import Model, CustomExplicitOperation
 from csdl_om import Simulator
 
 
-class CPFFDReguComp(Model):
+class CPFFDReguModel(Model):
 
     def initialize(self):
         self.parameters.declare('nonmatching_opt_ffd')
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
     nonmatching_opt.set_regu_CPFFD(regu_dir=[1], regu_side=[0])
 
-    m = CPFFDReguComp(nonmatching_opt_ffd=nonmatching_opt)
+    m = CPFFDReguModel(nonmatching_opt_ffd=nonmatching_opt)
     m.init_paramters()
     sim = Simulator(m)
     sim.run()
