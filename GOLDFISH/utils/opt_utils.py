@@ -67,7 +67,8 @@ def update_func(u, u_array):
     u_petsc.assemble()
     u_petsc.ghostUpdate()
 
-def update_nest_vec(vec_array, nest_vec, comm=DEFAULT_COMM):
+def update_nest_vec(vec_array, nest_vec, 
+                    comm=DEFAULT_COMM):
     """
     Assign values from a numpy array to a nest petsc vector.
 
@@ -93,11 +94,12 @@ def update_nest_vec(vec_array, nest_vec, comm=DEFAULT_COMM):
     sub_array_list = []
     array_ind_off = 0
     for i in range(num_sub_vecs):
-        sub_array_list += [vec_array[array_ind_off+sub_vecs_range[i][0]: 
-                                     array_ind_off+sub_vecs_range[i][1]],]
+        sub_array = vec_array[array_ind_off+sub_vecs_range[i][0]: 
+                              array_ind_off+sub_vecs_range[i][1]]
+        sub_array_list += [sub_array,]
         array_ind_off += sub_vecs_size[i]
-    sub_array = np.concatenate(sub_array_list)
-    nest_vec.setArray(sub_array)
+    nest_array = np.concatenate(sub_array_list)
+    nest_vec.setArray(nest_array)
     nest_vec.assemble()
 
 

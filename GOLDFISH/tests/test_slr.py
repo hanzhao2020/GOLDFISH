@@ -130,7 +130,7 @@ for j in range(num_interfaces):
 
 nonmatching_opt.create_mortar_meshes(mortar_nels)
 nonmatching_opt.mortar_meshes_setup(mapping_list, mortar_mesh_locations, 
-                            penalty_coefficient)
+                            penalty_coefficient, 2)
 source_terms = []
 residuals = []
 for i in range(len(splines)):

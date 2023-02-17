@@ -10,11 +10,14 @@ class DispStatesComp(om.ImplicitComponent):
         self.options.declare('input_cp_iga_name_pre', default='CP_IGA')
         self.options.declare('output_u_name', default='displacements')
 
-    def init_paramters(self, save_files=False):
+    def init_paramters(self, save_files=False, nonlinear_solver_rtol=1e-3,
+                       nonlinear_solver_max_it=30):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.output_u_name = self.options['output_u_name']
         self.save_files = save_files
+        self.nonlinear_solver_max_it = nonlinear_solver_max_it
+        self.nonlinear_solver_rtol = nonlinear_solver_rtol
 
         self.disp_state_imop = DispImOpeartion(self.nonmatching_opt)
         self.opt_field = self.nonmatching_opt.opt_field
@@ -49,7 +52,9 @@ class DispStatesComp(om.ImplicitComponent):
 
     def solve_nonlinear(self, inputs, outputs):
         self.update_inputs_outpus(inputs, outputs)
-        outputs[self.output_u_name] = self.disp_state_imop.solve_nonlinear()
+        outputs[self.output_u_name] = self.disp_state_imop.solve_nonlinear(
+                                      self.nonlinear_solver_max_it,
+                                      self.nonlinear_solver_rtol)
         if self.save_files:
             self.nonmatching_opt.save_files(thickness=False)
 

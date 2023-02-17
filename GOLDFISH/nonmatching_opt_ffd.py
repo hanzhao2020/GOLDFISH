@@ -54,7 +54,6 @@ class NonMatchingOptFFD(NonMatchingOpt):
 
         self.pin_dof = np.array([], dtype='int32')
         self.cppin_size = 0
-        self.dcppindcpffd_list = []
 
     def set_FFD(self, knotsffd, cpffd):
         """
@@ -160,13 +159,19 @@ class NonMatchingOptFFD(NonMatchingOpt):
         ----------
         align_dir : int
         """
-        self.align_dir = align_dir
-        self.cp_align_size = 1
-        for i in range(self.nsd):
-            if self.align_dir == i:
-                self.cp_align_size *= self.cpffd_shape[i]-1
-            else:
-                self.cp_align_size *= self.cpffd_shape[i]
+        if not isinstance(align_dir, list):
+            self.align_dir = [align_dir]
+        else:
+            self.align_dir = align_dir
+        self.cp_align_size = 0
+        for direction in self.align_dir:
+            cp_align_size_sub = 1
+            for i in range(self.nsd):
+                if direction == i:
+                    cp_align_size_sub *= self.cpffd_shape[i]-1
+                else:
+                    cp_align_size_sub *= self.cpffd_shape[i]
+            self.cp_align_size += cp_align_size_sub
         self.dcpaligndcpffd = self.dCPaligndCPFFD()
         return self.dcpaligndcpffd
 
@@ -442,33 +447,34 @@ class NonMatchingOptFFD(NonMatchingOpt):
     def dCPaligndCPFFD(self):
         deriv = np.zeros((self.cp_align_size, self.cpffd_size))
         row_ind, l, m = 0, self.cpffd_shape[0], self.cpffd_shape[1]
-        if self.align_dir == 0:
-            for k in range(self.cpffd_shape[2]):
-                for j in range(self.cpffd_shape[1]):
-                    for i in range(1, self.cpffd_shape[0]):
-                        col_ind0 = ijk2dof(0, j, k, l, m)
-                        col_ind1 = ijk2dof(i, j, k, l, m)
-                        deriv[row_ind, col_ind0] = 1.
-                        deriv[row_ind, col_ind1] = -1.
-                        row_ind += 1
-        elif self.align_dir == 1:
-            for k in range(self.cpffd_shape[2]):
-                for i in range(self.cpffd_shape[0]):
-                    for j in range(1, self.cpffd_shape[1]):
-                        col_ind0 = ijk2dof(i, 0, k, l, m)
-                        col_ind1 = ijk2dof(i, j, k, l, m)
-                        deriv[row_ind, col_ind0] = 1.
-                        deriv[row_ind, col_ind1] = -1.
-                        row_ind += 1
-        elif self.align_dir == 2:
-            for j in range(self.cpffd_shape[1]):    
-                for i in range(self.cpffd_shape[0]):
-                    for k in range(1,self.cpffd_shape[2]):
-                        col_ind0 = ijk2dof(i, j, 0, l, m)
-                        col_ind1 = ijk2dof(i, j, k, l, m)
-                        deriv[row_ind, col_ind0] = 1.
-                        deriv[row_ind, col_ind1] = -1.
-                        row_ind += 1
+        for direction in self.align_dir:
+            if direction == 0:
+                for k in range(self.cpffd_shape[2]):
+                    for j in range(self.cpffd_shape[1]):
+                        for i in range(1, self.cpffd_shape[0]):
+                            col_ind0 = ijk2dof(0, j, k, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
+            elif direction == 1:
+                for k in range(self.cpffd_shape[2]):
+                    for i in range(self.cpffd_shape[0]):
+                        for j in range(1, self.cpffd_shape[1]):
+                            col_ind0 = ijk2dof(i, 0, k, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
+            elif direction == 2:
+                for j in range(self.cpffd_shape[1]):    
+                    for i in range(self.cpffd_shape[0]):
+                        for k in range(1,self.cpffd_shape[2]):
+                            col_ind0 = ijk2dof(i, j, 0, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
         deriv_coo = coo_matrix(deriv)
         return deriv_coo
 

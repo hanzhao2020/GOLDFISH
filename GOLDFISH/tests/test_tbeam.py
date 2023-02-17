@@ -87,7 +87,7 @@ for i in range(nonmatching_opt.num_intersections):
                                      physical_locations[i]),]
 
 nonmatching_opt.mortar_meshes_setup(mapping_list, mortar_mesh_locations,
-                                    penalty_coefficient)
+                                    penalty_coefficient, 2)
 
 source_terms = []
 residuals = []
