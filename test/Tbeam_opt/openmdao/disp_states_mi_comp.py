@@ -1,58 +1,25 @@
 from GOLDFISH.nonmatching_opt_ffd import *
 from disp_states_mi_imop import *
+import openmdao.api as om
+from openmdao.api import Problem
 
-from csdl import Model, CustomImplicitOperation
-import csdl
-from csdl_om import Simulator
-
-class DispMintStatesModel(Model):
+class DispMintStatesComp(om.ImplicitComponent):
 
     def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
-        self.parameters.declare('input_xi_name', default='int_para')
-        self.parameters.declare('output_u_name', default='displacements')
+        self.options.declare('nonmatching_opt')
+        self.options.declare('input_cp_iga_name_pre', default='CP_IGA')
+        self.options.declare('input_xi_name', default='int_para')
+        self.options.declare('output_u_name', default='displacements')
 
-    def init_paramters(self, save_files=False):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
-        self.input_xi_name = self.parameters['input_xi_name']
-        self.output_u_name = self.parameters['output_u_name']
-        self.op = DispMintStatesOperation(
-                  nonmatching_opt=self.nonmatching_opt,
-                  input_cp_iga_name_pre=self.input_cp_iga_name_pre,
-                  input_xi_name=self.input_xi_name,
-                  output_u_name=self.output_u_name)
-        self.op.init_paramters(save_files=save_files)
-
-    def define(self):
-        cp_iga_list = [None for i in range(len(self.op.opt_field))]
-        for i, field in enumerate(self.op.opt_field):
-            cp_iga_list[i] = self.declare_variable(
-                            self.op.input_cp_iga_name_list[i],
-                            shape=(self.op.input_cp_shape),
-                            val=self.op.init_cp_iga[:,field])
-        xi = self.declare_variable(self.op.input_xi_name,
-                                   shape=(self.op.input_xi_shape),
-                                   val=self.op.init_xi)
-        disp = csdl.custom(*cp_iga_list, xi, op=self.op)
-        self.register_output(self.op.output_u_name, disp)
-
-
-class DispMintStatesOperation(CustomImplicitOperation):
-
-    def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
-        self.parameters.declare('input_xi_name', default='int_para')
-        self.parameters.declare('output_u_name', default='displacements')
-
-    def init_paramters(self, save_files=False):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
-        self.input_xi_name = self.parameters['input_xi_name']
-        self.output_u_name = self.parameters['output_u_name']
+    def init_paramters(self, save_files=False, nonlinear_solver_rtol=1e-3,
+                       nonlinear_solver_max_it=30):
+        self.nonmatching_opt = self.options['nonmatching_opt']
+        self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
+        self.input_xi_name = self.options['input_xi_name']
+        self.output_u_name = self.options['output_u_name']
         self.save_files = save_files
+        self.nonlinear_solver_max_it = nonlinear_solver_max_it
+        self.nonlinear_solver_rtol = nonlinear_solver_rtol
 
         self.disp_mint_state_imop = DispMintImOpeartion(self.nonmatching_opt)
         self.opt_field = self.nonmatching_opt.opt_field
@@ -61,25 +28,27 @@ class DispMintStatesOperation(CustomImplicitOperation):
         self.output_shape = self.nonmatching_opt.vec_iga_dof
         self.init_cp_iga = self.nonmatching_opt.get_init_CPIGA()
         self.init_xi = self.nonmatching_opt.cpiga2xi.xi_flat_global
-        self.current_xi = self.init_xi.copy()
+        # self.current_xi = self.init_xi.copy()
 
         self.input_cp_iga_name_list = []
         for i, field in enumerate(self.opt_field):
             self.input_cp_iga_name_list += \
                 [self.input_cp_iga_name_pre+str(field)]
 
-    def define(self):        
+    def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cp_iga_name_list[i],
-                           shape=self.input_cp_shape,)
-                           # val=self.init_cp_iga[:,field])
-        self.add_input(self.input_xi_name, shape=self.input_xi_shape)
+                           shape=self.input_cp_shape,
+                           val=self.init_cp_iga[:,field])
+        self.add_input(self.input_xi_name, 
+                       shape=self.input_xi_shape,
+                       val=self.init_xi)
         self.add_output(self.output_u_name, shape=self.output_shape)
         for i, field in enumerate(self.opt_field):
-            self.declare_derivatives(self.output_u_name,
+            self.declare_partials(self.output_u_name,
                                   self.input_cp_iga_name_list[i])
-        self.declare_derivatives(self.output_u_name, self.input_xi_name)
-        self.declare_derivatives(self.output_u_name, self.output_u_name)
+        self.declare_partials(self.output_u_name, self.input_xi_name)
+        self.declare_partials(self.output_u_name, self.output_u_name)
 
     def update_inputs_outpus(self, inputs, outputs):
         # print("Updating inputs outputs ...")
@@ -95,28 +64,27 @@ class DispMintStatesOperation(CustomImplicitOperation):
         self.nonmatching_opt.update_xi(inputs[self.input_xi_name])
         self.nonmatching_opt.update_transfer_matrices()
         # self.current_xi[:] = inputs[self.input_xi_name]
-        
-        self.nonmatching_opt.update_uIGA(outputs[self.output_u_name])
 
-    def evaluate_residuals(self, inputs, outputs, residuals):
+    def apply_nonlinear(self, inputs, outputs, residuals):
         self.update_inputs_outpus(inputs, outputs)
         residuals[self.output_u_name] = \
             self.disp_mint_state_imop.apply_nonlinear()
 
-    def solve_residual_equations(self, inputs, outputs):
+    def solve_nonlinear(self, inputs, outputs):
         self.update_inputs_outpus(inputs, outputs)
         outputs[self.output_u_name] = \
-            self.disp_mint_state_imop.solve_nonlinear()
-
+            self.disp_mint_state_imop.solve_nonlinear(
+                                      self.nonlinear_solver_max_it,
+                                      self.nonlinear_solver_rtol)
         if self.save_files:
             self.nonmatching_opt.save_files(thickness=False)
 
-    def compute_derivatives(self, inputs, outputs, derivatives):
+    def linearize(self, inputs, outputs, partials):
         self.update_inputs_outpus(inputs, outputs)
         self.disp_mint_state_imop.linearize()
 
-    def compute_jacvec_product(self, inputs, outputs, d_inputs, 
-                               d_outputs, d_residuals, mode):
+    def apply_linear(self, inputs, outputs, d_inputs, 
+                     d_outputs, d_residuals, mode):
         self.update_inputs_outpus(inputs, outputs)
         d_inputs_array_list = []
         for i, field in enumerate(self.opt_field):
@@ -142,7 +110,8 @@ class DispMintStatesOperation(CustomImplicitOperation):
             self.disp_mint_state_imop.apply_linear_rev(d_inputs_array_list, 
                 d_outputs_array, d_residuals_array)
 
-    def apply_inverse_jacobian(self, d_outputs, d_residuals, mode):
+
+    def solve_linear(self, d_outputs, d_residuals, mode):
         d_outputs_array = d_outputs[self.output_u_name]
         d_residuals_array = d_residuals[self.output_u_name]
         if mode == 'fwd':
@@ -273,15 +242,14 @@ if __name__ == "__main__":
                       nonmatching_opt_ffd.spline_test_funcs[s_ind], 
                       E, nu, h_th, source_terms[s_ind])]
     nonmatching_opt_ffd.set_residuals(residuals)
-    nonmatching_opt_ffd.set_xi_diff_info(preprocessor)    
+    nonmatching_opt_ffd.set_xi_diff_info(preprocessor)  
 
-    m = DispMintStatesModel(nonmatching_opt=nonmatching_opt_ffd)
-    m.init_paramters()
-    sim = Simulator(m)
-    sim.run()
-    print("Check partials:")
-    start_time = perf_counter()
-    a = sim.check_partials(compact_print=True)
-    end_time = perf_counter()
-    run_time = end_time - start_time
-    print("Check partial run time:", run_time)
+    prob = Problem()
+    comp = DispMintStatesComp(nonmatching_opt=nonmatching_opt_ffd)
+    comp.init_paramters()
+    prob.model = comp
+    prob.setup()
+    prob.run_model()
+    prob.model.list_outputs()
+    print('check_partials:')
+    prob.check_partials(compact_print=True)
