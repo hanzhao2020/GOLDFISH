@@ -2,7 +2,7 @@ from PENGoLINS.nonmatching_coupling import *
 from GOLDFISH.utils.opt_utils import *
 from GOLDFISH.utils.bsp_utils import *
 
-from cpiga2xi import *
+# from cpiga2xi import *
 
 def Lambda_tilde(R, num_pts, phy_dim, para_dim, order=0):
     """
@@ -82,8 +82,9 @@ class NonMatchingOpt(NonMatchingCoupling):
     """
     def __init__(self, splines, E, h_th, nu, num_field=3, 
                  int_V_family='CG', int_V_degree=1,
-                 int_dx_metadata=None, contact=None, opt_field=[0,1,2], 
-                 comm=None):
+                 int_dx_metadata=None, contact=None, 
+                 opt_shape=True, opt_field=[0,1,2], 
+                 opt_thickness=False, comm=None):
         """
         Parameters
         ----------
@@ -109,6 +110,8 @@ class NonMatchingOpt(NonMatchingCoupling):
                          int_V_family, int_V_degree,
                          int_dx_metadata, contact, comm)
         self.opt_field = opt_field
+        self.opt_shape = opt_shape
+        self.opt_thickness = opt_thickness
         self.nsd = self.splines[0].nsd
 
         # Create nested vectors in IGA DoFs
@@ -165,6 +168,20 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.cp_iga_nest = self.vec_scalar_iga_nest
         # Set initial control points in IGA DoFs as None
         self.init_cp_iga = None
+
+        if self.opt_thickness:
+            # Create nested thickness vector
+            self.h_th_vec_list = [v2p(h_th.vector() ) for h_th in self.h_th]
+            self.h_th_nest = create_nest_PETScVec(self.h_th_vec_list,
+                                                  comm=self.comm)
+            self.h_th_dof = self.h_th_nest.getSizes()[1]
+            self.h_th_sizes = [h_th_sub.getSizes()[1] for h_th_sub in 
+                               self.h_th_vec_list]
+            self.init_h_th_list = [get_petsc_vec_array(h_th_sub, 
+                                   comm=self.comm) for h_th_sub in
+                                   self.h_th_vec_list]
+            self.init_h_th = get_petsc_vec_array(self.h_th_nest, 
+                                                 comm=self.comm)
 
     def set_init_CPIGA(self, cp_iga):
         """
@@ -225,18 +242,29 @@ class NonMatchingOpt(NonMatchingCoupling):
                             mapping_list, mortar_parametric_coords, 
                             penalty_coefficient, transfer_mat_deriv, 
                             penalty_method)
-        self.dRm_dcpm_list = [self.mortar_dRmdCPm_symexp(field) 
-                              for field in self.opt_field]
+        if self.opt_shape:
+            self.dRm_dcpm_list = [self.mortar_dRmdCPm_symexp(field) 
+                                  for field in self.opt_field]
 
     def set_residuals(self, residuals, residuals_deriv=None):
         NonMatchingCoupling.set_residuals(self, residuals, residuals_deriv)
-        dR_dcp_ufl_symexp = [[] for field in self.opt_field]
-        for i, field in enumerate(self.opt_field):
+        if self.opt_shape:
+            dR_dcp_ufl_symexp = [[] for field in self.opt_field]
+            for i, field in enumerate(self.opt_field):
+                for s_ind in range(self.num_splines):
+                    dR_dcp_ufl_symexp[i] += [derivative(residuals[s_ind], 
+                                       self.splines[s_ind].cpFuncs[field]),]
+            self.dR_dcp_symexp = [[Form(dRdcp) for dRdcp in 
+                                  dR_dcp_single_field]
+                                  for dR_dcp_single_field in 
+                                  dR_dcp_ufl_symexp]
+        if self.opt_thickness:
+            dR_dh_th_ufl_symexp = []
             for s_ind in range(self.num_splines):
-                dR_dcp_ufl_symexp[i] += [derivative(residuals[s_ind], 
-                                   self.splines[s_ind].cpFuncs[field]),]
-        self.dR_dcp_symexp = [[Form(dRdcp) for dRdcp in dR_dcp_single_field]
-                             for dR_dcp_single_field in dR_dcp_ufl_symexp]
+                dR_dh_th_ufl_symexp += [derivative(residuals[s_ind],
+                                        self.h_th[s_ind])]
+            self.dR_dh_th_symexp = [Form(dR_dh_th) for dR_dh_th 
+                                    in dR_dh_th_ufl_symexp]
 
     def vec_IGA2FE(self, v_iga, v_fe, s_ind):
         """
@@ -289,6 +317,12 @@ class NonMatchingOpt(NonMatchingCoupling):
             self.vec_scalar_IGA2FE(cp_iga_sub[s_ind],
                  v2p(self.splines[s_ind].cpFuncs[field].vector()), s_ind)
 
+    def update_h_th(self, h_th_array):
+        """
+        Update splines' thickness with input array
+        """
+        update_nest_vec(h_th_array, self.h_th_nest, comm=self.comm)
+
     def set_xi_diff_info(self, preprocessor, int_indices_diff=None):
         """
         This function is noly need when differentiating intersections'
@@ -311,7 +345,9 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.xi_size = self.cpiga2xi.xi_size_global
 
     def update_xi(self, xi_flat):
-
+        """
+        Update intersections' parametric coordinates
+        """
         sub_vecs = self.xi_nest.getNestSubVecs()
         num_sub_vecs = len(sub_vecs)
 
@@ -334,9 +370,10 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.xi_nest.setArray(nest_array)
         self.xi_nest.assemble()
 
-        # update_nest_vec(xi_flat, self.xi_nest, rev_sub_array=True, comm=self.comm)
-
     def update_transfer_matrices_sub(self, xi_func, index, side):
+        """
+        Update transfer matrices for single intersection on one side
+        """
         move_mortar_mesh(self.mortar_meshes[index], xi_func)
         self.transfer_matrices_list[index][side] = \
             create_transfer_matrix_list(self.splines[
@@ -359,6 +396,9 @@ class NonMatchingOpt(NonMatchingCoupling):
                     self.mortar_cpfuncs[index][side][i][j].vector())
 
     def update_transfer_matrices(self):
+        """
+        Update transfer matrices for all intersections
+        """
         for int_ind, int_ind_global in enumerate(self.int_indices_diff):
             for side in range(self.para_dim):
                 self.update_transfer_matrices_sub(
@@ -382,7 +422,7 @@ class NonMatchingOpt(NonMatchingCoupling):
     def extract_nonmatching_vec(self, vec_list, scalar=False, 
                                 apply_bcs=False):
         """
-        extract non-matching vector from FE to IGA DoFs
+        Extract non-matching vector from FE to IGA DoFs
         """
         vec_iga_list = []
         for i in range(self.num_splines):
@@ -616,6 +656,19 @@ class NonMatchingOpt(NonMatchingCoupling):
                     dRt_dcp_FE[i][j] = dRm_dcpm_FE[i][j]
         return dRt_dcp_FE
 
+    def assemble_RFEdh_th(self):
+        """
+        Derivatives of non-matching residual w.r.t. shell thickness
+        in FE DoFs.
+        """
+        dRFE_dh_th = [[None for i1 in range(self.num_splines)] 
+                            for i2 in range(self.num_splines)]
+        for i in range(self.num_splines):
+            dRFE_dh_th_assemble = assemble(self.dR_dh_th_symexp[i])
+            dRFE_dh_th[i][i] = m2p(dRFE_dh_th_assemble)
+        return dRFE_dh_th
+
+
     def RIGA(self):
         """
         Return the non-matching residual in IGA DoFs.
@@ -657,7 +710,18 @@ class NonMatchingOpt(NonMatchingCoupling):
                          apply_col_bcs=False)
         return dRIGAdcp_IGA
 
-    def dRIGAdxi(self, int_indices_diff=None):
+    def dRIGAdh_th(self):
+        """
+        Return the derivative of non-matching residual in IGA DoFs
+        w.r.t. shell thickness in IGA DoFs.
+        """
+        dRFEdh_th = self.assemble_RFEdh_th()
+        dRIGAdh_th_mat = self.extract_nonmatching_mat(dRFEdh_th,
+                         ext_right=False, apply_col_bcs=False)
+        return dRIGAdh_th_mat
+
+    # def dRIGAdxi(self, int_indices_diff=None):
+    def dRIGAdxi(self):
         """
         Reserved for shape optimization with moving intersections
         """
@@ -957,12 +1021,6 @@ class NonMatchingOpt(NonMatchingCoupling):
             dRIGAdxi_sub = [self.der_mat_IGA_offdiag, self.der_mat_IGA_diag]
         return dRIGAdxi_sub
 
-    def dRIGAdh_th(self):
-        """
-        Reserved for thickness optimization
-        """
-        return 
-
     def create_files(self, save_path="./", folder_name="results/", 
                      thickness=False):
         """
@@ -1016,8 +1074,8 @@ class NonMatchingOpt(NonMatchingCoupling):
                         'F'+str(i)+'_'+str(j+1), 'F'+str(i)+'_'+str(j+1))
                     self.F_files[i][j+1] << self.splines[i].cpFuncs[j+1]
             if thickness:
-                self.h_ths[i].rename('t'+str(i), 't'+str(i))
-                self.t_files[i] << self.h_ths[i]
+                self.h_th[i].rename('t'+str(i), 't'+str(i))
+                self.t_files[i] << self.h_th[i]
 
 if __name__ == '__main__':
     pass

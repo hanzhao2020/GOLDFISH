@@ -11,6 +11,8 @@ class IntEnergyExOperation(object):
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
+        self.opt_shape = self.nonmatching_opt.opt_shape
+        self.opt_thickness = self.nonmatching_opt.opt_thickness
 
         self.wint_forms = []
         self.dwintdu_forms = []
@@ -28,12 +30,20 @@ class IntEnergyExOperation(object):
                       self.nonmatching_opt.spline_funcs[s_ind])
             self.dwintdu_forms += [dwintdu]
 
-        self.dwintdcp_forms = [[] for i in range(len(self.opt_field))]
-        for i, field in enumerate(self.opt_field):
+        if self.opt_shape:
+            self.dwintdcp_forms = [[] for i in range(len(self.opt_field))]
+            for i, field in enumerate(self.opt_field):
+                for s_ind in range(self.num_splines):
+                    dwintdcp = derivative(self.wint_forms[s_ind],
+                               self.splines[s_ind].cpFuncs[field])
+                    self.dwintdcp_forms[i] += [dwintdcp]
+
+        if self.opt_thickness:
+            self.dwintdh_th_forms = []
             for s_ind in range(self.num_splines):
-                dwintdcp = derivative(self.wint_forms[s_ind],
-                           self.splines[s_ind].cpFuncs[field])
-                self.dwintdcp_forms[i] += [dwintdcp]
+                dwintdh_th = derivative(self.wint_forms[s_ind],
+                                        self.nonmatching_opt.h_th[s_ind])
+                self.dwintdh_th_forms += [dwintdh_th]
 
     def Wint(self):
         wint_val = 0
@@ -70,9 +80,28 @@ class IntEnergyExOperation(object):
         else:
             return dwintdcp_iga_nest
 
+    def dWintdh_th(self, extract=False, array=True):
+        dwintdh_th_list = []
+        for s_ind in range(self.num_splines):
+            dwintdh_th_assemble = assemble(self.dwintdh_th_forms[s_ind])
+            dwintdh_th_list += [v2p(dwintdh_th_assemble),]            
+        if extract:
+            dwintdh_th_nest = self.nonmatching_opt.\
+                extract_nonmatching_vec(dwintdh_th_list, scalar=True)
+        else:
+            dwintdh_th_nest = create_nest_PETScVec(dwintdh_th_list,
+                              comm=self.nonmatching_opt.comm)
+        if array:
+            return get_petsc_vec_array(dwintdh_th_nest,
+                                       comm=self.nonmatching_opt.comm)
+        else:
+            return dwintdh_th_nest
+            
+
 if __name__ == '__main__':
-    from GOLDFISH.tests.test_tbeam import nonmatching_opt
+    # from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
+    from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     wint_op = IntEnergyExOperation(nonmatching_opt)
 
@@ -84,3 +113,4 @@ if __name__ == '__main__':
     wint = wint_op.Wint()
     dwint_duiga = wint_op.dWintduIGA()
     dwint_dcpiga = wint_op.dWintdCPIGA(1)
+    dwintdh_th = wint_op.dWintdh_th()

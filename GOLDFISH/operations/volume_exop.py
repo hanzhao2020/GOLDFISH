@@ -6,32 +6,33 @@ class VolumeExOperation(object):
     structure, derivatives of compliacne w.r.t. displacements 
     and control points both in IGA DoFs.
     """
-    def __init__(self, nonmatching_opt, thickness_deriv=False):
+    def __init__(self, nonmatching_opt):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
+        self.opt_shape = self.nonmatching_opt.opt_shape
+        self.opt_thickness = self.nonmatching_opt.opt_thickness
 
         self.vol_forms = []
         for s_ind in range(self.num_splines):
             vol = self.nonmatching_opt.h_th[s_ind]*self.splines[s_ind].dx
             self.vol_forms += [vol]
 
-        if thickness_deriv is True:
-            self.dvoldu_forms = []
+        if self.opt_shape:
+            self.dvoldcp_forms = [[] for i in range(len(self.opt_field))]
+            for i, field in enumerate(self.opt_field):
+                for s_ind in range(self.num_splines):
+                    dvoldcp = derivative(self.vol_forms[s_ind],
+                              self.splines[s_ind].cpFuncs[field])
+                    self.dvoldcp_forms[i] += [dvoldcp]
+
+        if self.opt_thickness:
+            self.dvoldh_th_forms = []
             for s_ind in range(self.num_splines):
                 dvoldh_th = derivative(self.vol_forms[s_ind], 
                                        self.nonmatching_opt.h_th[s_ind])
-                self.dvoldu_forms += [dvoldh_th]
-        else:
-            self.dvoldu_forms = None
-
-        self.dvoldcp_forms = [[] for i in range(len(self.opt_field))]
-        for i, field in enumerate(self.opt_field):
-            for s_ind in range(self.num_splines):
-                dvoldcp = derivative(self.vol_forms[s_ind],
-                          self.splines[s_ind].cpFuncs[field])
-                self.dvoldcp_forms[i] += [dvoldcp]
+                self.dvoldh_th_forms += [dvoldh_th]
 
     def volume(self):
         vol_val = 0
@@ -42,7 +43,7 @@ class VolumeExOperation(object):
     def dvoldh_th(self, extract=False, array=True):
         dvoldh_th_list = []
         for s_ind in range(self.num_splines):
-            dwintdu_assmble = assemble(self.dvoldu_forms[s_ind])
+            dwintdu_assmble = assemble(self.dvoldh_th_forms[s_ind])
             dvoldh_th_list += [v2p(dwintdu_assmble),]
         if extract:
             dvoldh_th_nest = self.nonmatching_opt.\
@@ -72,8 +73,9 @@ class VolumeExOperation(object):
             return dvoldcp_iga_nest
 
 if __name__ == '__main__':
-    from GOLDFISH.tests.test_tbeam import nonmatching_opt
+    # from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
+    from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     wint_op = VolumeExOperation(nonmatching_opt)
 
@@ -85,3 +87,4 @@ if __name__ == '__main__':
     wint = wint_op.volume()
     # dwint_duiga = wint_op.dvoldh_th()
     dwint_dcpiga = wint_op.dvoldCPIGA(1)
+    dwint_dh_th = wint_op.dvoldh_th()

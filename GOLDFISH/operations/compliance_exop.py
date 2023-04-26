@@ -11,6 +11,7 @@ class ComplianceExOperation(object):
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
+        self.opt_shape = self.nonmatching_opt.opt_shape
         self.forces = forces
 
         self.c_forms = []
@@ -24,12 +25,13 @@ class ComplianceExOperation(object):
                      self.nonmatching_opt.spline_funcs[s_ind])
             self.dcpldu_forms += [dcpldu]
 
-        self.dcpldcp_forms = [[] for i in range(len(self.opt_field))]
-        for i, field in enumerate(self.opt_field):
-            for s_ind in range(self.num_splines):
-                dcpldcp = derivative(self.c_forms[s_ind],
-                           self.splines[s_ind].cpFuncs[field])
-                self.dcpldcp_forms[i] += [dcpldcp]
+        if self.opt_shape:
+            self.dcpldcp_forms = [[] for i in range(len(self.opt_field))]
+            for i, field in enumerate(self.opt_field):
+                for s_ind in range(self.num_splines):
+                    dcpldcp = derivative(self.c_forms[s_ind],
+                               self.splines[s_ind].cpFuncs[field])
+                    self.dcpldcp_forms[i] += [dcpldcp]
 
     def cpl(self):
         cpl_val = 0

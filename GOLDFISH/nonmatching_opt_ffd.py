@@ -10,9 +10,10 @@ class NonMatchingOptFFD(NonMatchingOpt):
     to setup optimization problem for non-matching structures.
     """
     def __init__(self, splines, E, h_th, nu, num_field=3, 
-                 int_V_family='CG', int_V_degree=1, 
-                 int_dx_metadata=None, contact=None, opt_field=[0,1,2],
-                 comm=None):
+                 int_V_family='CG', int_V_degree=1,
+                 int_dx_metadata=None, contact=None, 
+                 opt_shape=True, opt_field=[0,1,2], 
+                 opt_thickness=False, comm=None):
         """
         Parameters
         ----------
@@ -35,8 +36,8 @@ class NonMatchingOptFFD(NonMatchingOpt):
         comm : mpi4py.MPI.Intracomm, optional, default is None.
         """
         super().__init__(splines, E, h_th, nu, num_field, 
-                         int_V_family, int_V_degree,
-                         int_dx_metadata, contact, opt_field, comm)
+                         int_V_family, int_V_degree, int_dx_metadata, 
+                         contact, opt_shape, opt_field, opt_thickness, comm)
 
         # Bspline surfaces' control points in FE DoFs
         cpsurf_fe_temp = [[] for i in range(self.nsd)]
