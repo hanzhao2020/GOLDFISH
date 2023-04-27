@@ -9,3 +9,5 @@ from GOLDFISH.openmdao_comps.disp_states_comp import *
 from GOLDFISH.openmdao_comps.ffd2surf_comp import *
 from GOLDFISH.openmdao_comps.int_energy_comp import *
 from GOLDFISH.openmdao_comps.volume_comp import *
+from GOLDFISH.openmdao_comps.h_th_map_comp import *
+from GOLDFISH.openmdao_comps.max_vmstress_comp import *
