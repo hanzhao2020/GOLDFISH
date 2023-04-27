@@ -24,34 +24,40 @@ class ComplianceComp(om.ExplicitComponent):
                                             self.forces)
 
         self.opt_field = self.nonmatching_opt.opt_field
+        self.opt_shape = self.nonmatching_opt.opt_shape
+
         self.input_u_shape = self.nonmatching_opt.vec_iga_dof
-        self.input_cpiga_shape = self.nonmatching_opt.vec_scalar_iga_dof
         self.init_disp_array = get_petsc_vec_array(
                                self.nonmatching_opt.u_iga_nest)
         self.init_disp_array = np.ones(self.nonmatching_opt.vec_iga_dof)
-        self.init_cp_iga = self.nonmatching_opt.get_init_CPIGA()
-
-        self.input_cp_iga_name_list = []
-        for i, field in enumerate(self.opt_field):
-            self.input_cp_iga_name_list += \
-                [self.input_cp_iga_name_pre+str(field)]
+        
+        if self.opt_shape:
+            self.input_cpiga_shape = self.nonmatching_opt.vec_scalar_iga_dof
+            self.init_cp_iga = self.nonmatching_opt.get_init_CPIGA()
+            self.input_cp_iga_name_list = []
+            for i, field in enumerate(self.opt_field):
+                self.input_cp_iga_name_list += \
+                    [self.input_cp_iga_name_pre+str(field)]
 
     def setup(self):
         self.add_output(self.output_c_name)
         self.add_input(self.input_u_name, shape=self.input_u_shape,
                        val=self.init_disp_array)
-        for i, field in enumerate(self.opt_field):
-            self.add_input(self.input_cp_iga_name_list[i],
-                           shape=self.input_cpiga_shape,
-                           val=self.init_cp_iga[:,field])
-            self.declare_partials(self.output_c_name,
-                                  self.input_cp_iga_name_list[i])
         self.declare_partials(self.output_c_name, self.input_u_name)
 
+        if self.opt_shape:
+            for i, field in enumerate(self.opt_field):
+                self.add_input(self.input_cp_iga_name_list[i],
+                               shape=self.input_cpiga_shape,
+                               val=self.init_cp_iga[:,field])
+                self.declare_partials(self.output_c_name,
+                                      self.input_cp_iga_name_list[i])
+
     def update_inputs(self, inputs):
-        for i, field in enumerate(self.opt_field):
-            self.nonmatching_opt.update_CPIGA(
-                inputs[self.input_cp_iga_name_list[i]], field)
+        if self.opt_shape:
+            for i, field in enumerate(self.opt_field):
+                self.nonmatching_opt.update_CPIGA(
+                    inputs[self.input_cp_iga_name_list[i]], field)
         self.nonmatching_opt.update_uIGA(inputs[self.input_u_name])
 
     def compute(self, inputs, outputs):
@@ -62,10 +68,11 @@ class ComplianceComp(om.ExplicitComponent):
         self.update_inputs(inputs)
         dcpldu_IGA = self.c_exop.dcplduIGA(array=True, apply_bcs=True)
         partials[self.output_c_name, self.input_u_name] = dcpldu_IGA
-        for i, field in enumerate(self.opt_field):
-            dcpldcp_IGA = self.c_exop.dcpldCPIGA(field, array=True)
-            partials[self.output_c_name, 
-                     self.input_cp_iga_name_list[i]] = dcpldcp_IGA
+        if self.opt_shape:
+            for i, field in enumerate(self.opt_field):
+                dcpldcp_IGA = self.c_exop.dcpldCPIGA(field, array=True)
+                partials[self.output_c_name, 
+                         self.input_cp_iga_name_list[i]] = dcpldcp_IGA
 
 
 if __name__ == "__main__":
