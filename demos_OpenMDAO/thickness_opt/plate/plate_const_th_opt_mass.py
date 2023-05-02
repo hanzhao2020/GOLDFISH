@@ -75,7 +75,7 @@ class ThicknessOptGroup(om.Group):
         surf = 'top'
         rho = 1e2
         upper_vM = 1e6
-        self.max_vM_comp = MaxvMSressComp(nonmatching_opt=nonmatching_opt,
+        self.max_vM_comp = MaxvMStressComp(nonmatching_opt=nonmatching_opt,
                            rho=rho, alpha=None, m=upper_vM, surf=surf,
                            method='pnorm', linearize_stress=False, 
                            input_u_name=self.disp_name,
