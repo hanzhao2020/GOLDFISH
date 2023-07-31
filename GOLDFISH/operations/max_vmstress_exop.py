@@ -107,8 +107,8 @@ class MaxvMStressExOperation(object):
                       self.vMstress[s_ind], lumpMass=False)
             self.m_list += [v2p(vm_proj.vector()).max()[1]]
         self.m = np.max(self.m_list)
-        print("Computed m:", self.m)
-        print("Computed m_list:", self.m_list)
+        # print("Computed m:", self.m)
+        # print("Computed m_list:", self.m_list)
         return self.m_list, self.m
 
     def compute_max_vM(self):
@@ -119,7 +119,7 @@ class MaxvMStressExOperation(object):
             self.max_vM_sub_proj += [v2p(vm_proj.vector()).max()[1]]
         self.max_global = np.max(self.max_vM_sub_proj)
         print("Projected max vM global:", self.max_global)
-        print("Computed max vM sub:", self.max_vM_sub_proj)
+        # print("Projected max vM sub:", self.max_vM_sub_proj)
         return self.max_vM_sub_proj, self.max_global
 
     def KS_symexp(self, stress, ind):
@@ -140,13 +140,17 @@ class MaxvMStressExOperation(object):
     def continuous_KS_function(self, KS_form, ind):
         KS_val = assemble(KS_form)
         if KS_val == 0:
-            KS_val = 1e-8
+            KS_val = 1e-9
+        elif KS_val == inf:
+            KS_val = 1e14
         return self.m_list[ind] + 1/self.rho*np.log(1/self.alpha*KS_val)
 
     def continuous_pnorm_function(self, pnorm_form, ind):
         pnorm_val = assemble(pnorm_form)
         if pnorm_val == 0:
-            pnorm_val = 1e-8
+            pnorm_val = 1e-12
+        elif pnorm_val == inf:
+            pnorm_val = inf
         return self.m_list[ind]*(1/self.alpha*pnorm_val)**(1/self.rho)
 
     def continuous_max_vM_stress(self, max_vM_from, ind):
@@ -191,8 +195,9 @@ class MaxvMStressExOperation(object):
                            self.max_vM_forms[s_ind], s_ind)]
         max_vM_global = self.discrete_max_vM_stress(max_vM_sub)
         print("max_vM_global:", max_vM_global)
-        print("max_vM_sub:", max_vM_sub)
-        print("relative error of max stress:", np.abs(max_vM_global-self.max_global)/self.max_global)
+        # print("max_vM_sub:", max_vM_sub)
+        print("relative error of max stress:", 
+              np.abs(max_vM_global-self.max_global)/self.max_global)
         return max_vM_global
 
     def dglobal_KSdlocal_KS(self, stress_list, ind):
@@ -205,7 +210,9 @@ class MaxvMStressExOperation(object):
     def dlocal_KSdKS_form(self, max_vM_forms, ind):
         KS_val = assemble(max_vM_forms[ind])
         if KS_val == 0:
-            KS_val = 1e-8
+            KS_val = 1e-9
+        elif KS_val == inf:
+            KS_val = 1e14
         return 1./(self.rho*KS_val)
 
     def dglobal_pnormdlocal_prnom(self, stress_list, ind):
@@ -219,7 +226,9 @@ class MaxvMStressExOperation(object):
     def dlocal_pnormdpnorm_form(self, max_vM_forms, ind):
         pnorm_val = assemble(max_vM_forms[ind])
         if pnorm_val == 0:
-            pnorm_val = 1e-8
+            pnorm_val = 1e-12
+        elif pnorm_val == inf:
+            pnorm_val = inf
         temp_val0 = self.m_list[ind]*(1/self.alpha)**(1/self.rho)\
                   *(1/self.rho)*pnorm_val**(1/self.rho-1)
         return temp_val0
@@ -279,7 +288,7 @@ class MaxvMStressExOperation(object):
         else:
             return dglobal_max_vMdcpIGA_nest
 
-    def dmax_vMdh_th_global(self, extract=False, array=True):
+    def dmax_vMdh_th_global(self, array=True):
         max_vM_sub = []
         for s_ind in range(self.num_splines):
             max_vM_sub += [self.continuous_max_vM_stress(
@@ -297,7 +306,7 @@ class MaxvMStressExOperation(object):
             sub_deriv = v2p(a0*a1*dfdh_th)
             dglobal_max_vMdh_th_list += [sub_deriv]
 
-        if extract:
+        if self.nonmatching_opt.var_thickness:
             dglobal_max_vMdh_th_nest = self.nonmatching_opt.\
                                        extract_nonmatching_vec(
                                        dglobal_max_vMdh_th_list, scalar=True)

@@ -17,15 +17,19 @@ class DispStatesComp(om.ImplicitComponent):
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.input_h_th_name = self.options['input_h_th_name']
         self.output_u_name = self.options['output_u_name']
-        self.save_files = save_files
         self.nonlinear_solver_max_it = nonlinear_solver_max_it
         self.nonlinear_solver_rtol = nonlinear_solver_rtol
+        
+        self.save_files = save_files
+        self.major_iter_ind = 0
+        self.func_eval_ind = 0
+        self.func_eval_major_ind = []
 
-        self.disp_state_imop = DispImOpeartion(self.nonmatching_opt, 
-                                               self.save_files)
+        self.disp_state_imop = DispImOpeartion(self.nonmatching_opt)
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
+        self.var_thickness = self.nonmatching_opt.var_thickness
 
         self.output_shape = self.nonmatching_opt.vec_iga_dof
 
@@ -37,8 +41,13 @@ class DispStatesComp(om.ImplicitComponent):
                 self.input_cp_iga_name_list += \
                     [self.input_cp_iga_name_pre+str(field)]
         if self.opt_thickness:
-            self.input_h_th_shape = self.nonmatching_opt.h_th_dof
-            self.init_h_th = self.nonmatching_opt.init_h_th
+            if self.var_thickness:
+                self.input_h_th_shape = self.nonmatching_opt.vec_scalar_iga_dof
+                self.init_h_th = np.ones(self.nonmatching_opt.vec_scalar_iga_dof)*0.1
+            else:
+                self.input_h_th_shape = self.nonmatching_opt.h_th_dof
+                self.init_h_th = self.nonmatching_opt.init_h_th
+
 
     def setup(self):
         self.add_output(self.output_u_name, shape=self.output_shape)
@@ -62,7 +71,11 @@ class DispStatesComp(om.ImplicitComponent):
                 self.nonmatching_opt.update_CPIGA(
                     inputs[self.input_cp_iga_name_list[i]], field)
         if self.opt_thickness:
-            self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
+            if self.var_thickness:
+                self.nonmatching_opt.update_h_th_IGA(
+                                     inputs[self.input_h_th_name])
+            else:
+                self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
         self.nonmatching_opt.update_uIGA(outputs[self.output_u_name])
 
     def apply_nonlinear(self, inputs, outputs, residuals):
@@ -74,10 +87,23 @@ class DispStatesComp(om.ImplicitComponent):
         outputs[self.output_u_name] = self.disp_state_imop.solve_nonlinear(
                                       self.nonlinear_solver_max_it,
                                       self.nonlinear_solver_rtol)
+        
+        self.func_eval_ind += 1
+        # if self.save_files:
+        #     self.nonmatching_opt.save_files(
+        #         thickness=self.opt_thickness)
 
     def linearize(self, inputs, outputs, partials):
         self.update_inputs_outpus(inputs, outputs)
         self.disp_state_imop.linearize()
+
+        if self.save_files:
+            self.func_eval_major_ind += [self.func_eval_ind-1]
+            print("**** Saving pvd files, ind: {:6d} ****"
+                  .format(self.major_iter_ind))
+            self.nonmatching_opt.save_files(
+                thickness=self.opt_thickness)
+            self.major_iter_ind += 1
 
     def apply_linear(self, inputs, outputs, d_inputs, 
                      d_outputs, d_residuals, mode):

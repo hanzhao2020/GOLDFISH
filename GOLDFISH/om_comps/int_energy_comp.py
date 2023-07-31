@@ -13,18 +13,19 @@ class IntEnergyComp(om.ExplicitComponent):
         self.options.declare('input_u_name', default='displacements')
         self.options.declare('output_wint_name', default='w_int')
 
-    def init_paramters(self):
+    def init_paramters(self, wint_regu=None):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.input_h_th_name = self.options['input_h_th_name']
         self.input_u_name = self.options['input_u_name']
         self.output_wint_name = self.options['output_wint_name']
 
-        self.wint_exop = IntEnergyExOperation(self.nonmatching_opt)
+        self.wint_exop = IntEnergyExOperation(self.nonmatching_opt, wint_regu)
 
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
+        self.var_thickness = self.nonmatching_opt.var_thickness
 
         self.input_u_shape = self.nonmatching_opt.vec_iga_dof
         self.init_disp_array = get_petsc_vec_array(
@@ -39,8 +40,12 @@ class IntEnergyComp(om.ExplicitComponent):
                 self.input_cp_iga_name_list += \
                     [self.input_cp_iga_name_pre+str(field)]
         if self.opt_thickness:
-            self.input_h_th_shape = self.nonmatching_opt.h_th_dof
-            self.init_h_th = self.nonmatching_opt.init_h_th
+            if self.var_thickness:
+                self.input_h_th_shape = self.nonmatching_opt.vec_scalar_iga_dof
+                self.init_h_th = np.ones(self.nonmatching_opt.vec_scalar_iga_dof)*0.1
+            else:
+                self.input_h_th_shape = self.nonmatching_opt.h_th_dof
+                self.init_h_th = self.nonmatching_opt.init_h_th
 
     def setup(self):
         self.add_output(self.output_wint_name)
@@ -66,7 +71,12 @@ class IntEnergyComp(om.ExplicitComponent):
                 self.nonmatching_opt.update_CPIGA(
                     inputs[self.input_cp_iga_name_list[i]], field)
         if self.opt_thickness:
-            self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
+            if self.var_thickness:
+                self.nonmatching_opt.update_h_th_IGA(
+                                     inputs[self.input_h_th_name])
+            else:
+                self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
+            # self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
         self.nonmatching_opt.update_uIGA(inputs[self.input_u_name])
 
     def compute(self, inputs, outputs):

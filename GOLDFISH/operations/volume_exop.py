@@ -40,12 +40,12 @@ class VolumeExOperation(object):
             vol_val += assemble(self.vol_forms[s_ind])
         return vol_val
 
-    def dvoldh_th(self, extract=False, array=True):
+    def dvoldh_th(self, array=True):
         dvoldh_th_list = []
         for s_ind in range(self.num_splines):
             dwintdu_assmble = assemble(self.dvoldh_th_forms[s_ind])
             dvoldh_th_list += [v2p(dwintdu_assmble),]
-        if extract:
+        if self.nonmatching_opt.var_thickness:
             dvoldh_th_nest = self.nonmatching_opt.\
                 extract_nonmatching_vec(dvoldh_th_list, scalar=True)
         else:

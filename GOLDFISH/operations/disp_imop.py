@@ -5,20 +5,26 @@ class DispImOpeartion(object):
     Implicit operation to solve non-matching shell structures 
     displacements using nonlinear solver.
     """
-    def __init__(self, nonmatching_opt, save_files=False):
+    def __init__(self, nonmatching_opt):
         self.nonmatching_opt = nonmatching_opt
-        self.save_files = save_files
         self.comm = self.nonmatching_opt.comm
+
+        self.opt_shape = self.nonmatching_opt.opt_shape        
         self.opt_field = self.nonmatching_opt.opt_field
+        self.opt_thickness = self.nonmatching_opt.opt_thickness
+        self.var_thickness = self.nonmatching_opt.var_thickness
         
         self.dres_iga = self.nonmatching_opt.vec_iga_nest.copy()
         self.du_iga = self.nonmatching_opt.vec_iga_nest.copy()
 
-        if self.nonmatching_opt.opt_shape:
+        if self.opt_shape:
             self.dcp_iga = self.nonmatching_opt.vec_scalar_iga_nest.copy()
 
-        if self.nonmatching_opt.opt_thickness:
-            self.dh_th = self.nonmatching_opt.h_th_nest.copy()
+        if self.opt_thickness:
+            if self.var_thickness:
+                self.dh_th = self.nonmatching_opt.vec_scalar_iga_nest.copy()
+            else:
+                self.dh_th = self.nonmatching_opt.h_th_nest.copy()
 
     def apply_nonlinear(self):
         res_iga = self.nonmatching_opt.RIGA()
@@ -31,20 +37,16 @@ class DispImOpeartion(object):
                    max_it=max_it, zero_mortar_funcs=True, 
                    rtol=rtol, iga_dofs=True)
         u_iga_array = get_petsc_vec_array(u_iga, self.comm)
-
-        if self.save_files:
-            self.nonmatching_opt.save_files(
-                thickness=self.nonmatching_opt.opt_thickness)
         return u_iga_array
 
     def linearize(self):
         self.dRdu_iga = self.nonmatching_opt.dRIGAduIGA()
-        if self.nonmatching_opt.opt_shape:
+        if self.opt_shape:
             self.dRigadcpiga_list = []
             for i, field in enumerate(self.opt_field):
                 self.dRigadcpiga_list += [self.nonmatching_opt.
                                           dRIGAdCPIGA(field),]
-        if self.nonmatching_opt.opt_thickness:
+        if self.opt_thickness:
             self.dRigadh_th = self.nonmatching_opt.dRIGAdh_th()
 
     def apply_linear_fwd(self, d_inputs_array_list=None, 
@@ -62,7 +64,7 @@ class DispImOpeartion(object):
                                                      self.comm)
                 d_residuals_array[:] += dres_iga_array
             if d_inputs_array_list is not None:
-                if self.nonmatching_opt.opt_shape:
+                if self.opt_shape:
                     for i, field in enumerate(self.opt_field):
                         update_nest_vec(d_inputs_array_list[i], self.dcp_iga)
                         A_x_b(self.dRigadcpiga_list[i], self.dcp_iga, 
@@ -70,7 +72,7 @@ class DispImOpeartion(object):
                         dres_iga_array = get_petsc_vec_array(self.dres_iga, 
                                                              self.comm)
                         d_residuals_array[:] += dres_iga_array
-                if self.nonmatching_opt.opt_thickness:
+                if self.opt_thickness:
                     # Assume thickness vector is always on the last
                     # index of ``d_inputs_array_list``
                     update_nest_vec(d_inputs_array_list[-1], self.dh_th)
@@ -94,14 +96,14 @@ class DispImOpeartion(object):
                 du_iga_array = get_petsc_vec_array(self.du_iga, self.comm)
                 d_outputs_array[:] += du_iga_array
             if d_inputs_array_list is not None:
-                if self.nonmatching_opt.opt_shape:
+                if self.opt_shape:
                     for i, field in enumerate(self.opt_field):
                         AT_x_b(self.dRigadcpiga_list[i], self.dres_iga, 
                                self.dcp_iga)
                         dcp_iga_array = get_petsc_vec_array(self.dcp_iga, 
                                                             self.comm)
                         d_inputs_array_list[i][:] += dcp_iga_array
-                if self.nonmatching_opt.opt_thickness:
+                if self.opt_thickness:
                     AT_x_b(self.dRigadh_th, self.dres_iga, self.dh_th)
                     dh_th_array = get_petsc_vec_array(self.dh_th, self.comm)
                     d_inputs_array_list[-1][:] += dh_th_array

@@ -6,13 +6,17 @@ class IntEnergyExOperation(object):
     structure, derivatives of compliacne w.r.t. displacements 
     and control points both in IGA DoFs.
     """
-    def __init__(self, nonmatching_opt):
+    def __init__(self, nonmatching_opt, wint_regu=None):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
+        if wint_regu is None:
+            self.wint_regu = [None for i in range(self.num_splines)]
+        else:
+            self.wint_regu = wint_regu
 
         self.wint_forms = []
         self.dwintdu_forms = []
@@ -25,6 +29,8 @@ class IntEnergyExOperation(object):
                    X, x, self.nonmatching_opt.E[s_ind], 
                    self.nonmatching_opt.nu[s_ind],
                    self.nonmatching_opt.h_th[s_ind])*self.splines[s_ind].dx
+            if self.wint_regu[s_ind] is not None:
+                wint += self.wint_regu[s_ind]
             self.wint_forms += [wint]
             dwintdu = derivative(wint, 
                       self.nonmatching_opt.spline_funcs[s_ind])
@@ -85,7 +91,7 @@ class IntEnergyExOperation(object):
         for s_ind in range(self.num_splines):
             dwintdh_th_assemble = assemble(self.dwintdh_th_forms[s_ind])
             dwintdh_th_list += [v2p(dwintdh_th_assemble),]            
-        if extract:
+        if self.nonmatching_opt.var_thickness:
             dwintdh_th_nest = self.nonmatching_opt.\
                 extract_nonmatching_vec(dwintdh_th_list, scalar=True)
         else:

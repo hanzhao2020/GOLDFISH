@@ -6,13 +6,17 @@ class ComplianceExOperation(object):
     derivatives of compliacne w.r.t. displacements and control points
     both in IGA DoFs.
     """
-    def __init__(self, nonmatching_opt, forces):
+    def __init__(self, nonmatching_opt, forces, c_regu=None):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.forces = forces
+        if c_regu is None:
+            self.c_regu = [None for i in range(self.num_splines)]
+        else:
+            self.c_regu = c_regu
 
         self.c_forms = []
         self.dcpldu_forms = []
@@ -20,6 +24,8 @@ class ComplianceExOperation(object):
             cpl_sub = inner(self.forces[s_ind], 
                     self.nonmatching_opt.spline_funcs[s_ind])\
                     *self.splines[s_ind].dx
+            if self.c_regu[s_ind] is not None:
+                cpl_sub += self.c_regu[s_ind]
             self.c_forms += [cpl_sub]
             dcpldu = derivative(cpl_sub, 
                      self.nonmatching_opt.spline_funcs[s_ind])

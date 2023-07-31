@@ -84,7 +84,8 @@ class NonMatchingOpt(NonMatchingCoupling):
                  int_V_family='CG', int_V_degree=1,
                  int_dx_metadata=None, contact=None, 
                  opt_shape=True, opt_field=[0,1,2], 
-                 opt_thickness=False, comm=None):
+                 opt_thickness=False, var_thickness=False, 
+                 comm=None):
         """
         Parameters
         ----------
@@ -112,6 +113,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.opt_field = opt_field
         self.opt_shape = opt_shape
         self.opt_thickness = opt_thickness
+        self.var_thickness = var_thickness
         self.nsd = self.splines[0].nsd
 
         # Create nested vectors in IGA DoFs
@@ -165,23 +167,57 @@ class NonMatchingOpt(NonMatchingCoupling):
                                         comm=self.comm)
 
         # Create nested control points in IGA DoFs
-        self.cp_iga_nest = self.vec_scalar_iga_nest
+        self.cp_iga_nest = self.vec_scalar_iga_nest.copy()
         # Set initial control points in IGA DoFs as None
         self.init_cp_iga = None
 
         if self.opt_thickness:
-            # Create nested thickness vector
-            self.h_th_vec_list = [v2p(h_th.vector() ) for h_th in self.h_th]
-            self.h_th_nest = create_nest_PETScVec(self.h_th_vec_list,
-                                                  comm=self.comm)
-            self.h_th_dof = self.h_th_nest.getSizes()[1]
-            self.h_th_sizes = [h_th_sub.getSizes()[1] for h_th_sub in 
-                               self.h_th_vec_list]
-            self.init_h_th_list = [get_petsc_vec_array(h_th_sub, 
-                                   comm=self.comm) for h_th_sub in
+            if var_thickness:
+                self.h_th_fe_list = [v2p(h_th.vector()) for h_th in self.h_th]
+                self.h_th_fe_nest = create_nest_PETScVec(self.h_th_fe_list,
+                                                         comm=self.comm)
+                self.h_th_iga_nest = self.vec_scalar_iga_nest.copy()
+                self.init_h_th_fe = get_petsc_vec_array(self.h_th_fe_nest,
+                                                        comm=self.comm)
+                self.h_th_sizes = [h_th_fe_sub.getSizes()[1] for h_th_fe_sub in
+                                   self.h_th_fe_list]
+                self.init_h_th_iga = None
+            else:
+                # Create nested thickness vector
+                self.h_th_vec_list = [v2p(h_th.vector()) for h_th in self.h_th]
+                self.h_th_nest = create_nest_PETScVec(self.h_th_vec_list,
+                                                      comm=self.comm)
+                self.h_th_dof = self.h_th_nest.getSizes()[1]
+                self.h_th_sizes = [h_th_sub.getSizes()[1] for h_th_sub in 
                                    self.h_th_vec_list]
-            self.init_h_th = get_petsc_vec_array(self.h_th_nest, 
-                                                 comm=self.comm)
+                self.init_h_th_list = [get_petsc_vec_array(h_th_sub, 
+                                       comm=self.comm) for h_th_sub in
+                                       self.h_th_vec_list]
+                self.init_h_th = get_petsc_vec_array(self.h_th_nest, 
+                                                     comm=self.comm)
+
+        # Initial attributes
+        self.init_cpfuncs_list = [[] for s_ind in range(self.num_splines)]
+        self.hl_phy = []
+        # self.h_phy_linear = []
+        # self.h_phy_avg = []
+        self.ha_phy = []
+        self.ha_phy_linear = []
+        self.hl_phy_linear = []
+        for s_ind in range(self.num_splines):
+            for field in range(self.nsd+1):
+                self.init_cpfuncs_list[s_ind] += [Function(self.splines[s_ind].V_control)]
+                self.init_cpfuncs_list[s_ind][field].assign(self.splines[s_ind].cpFuncs[field])
+            self.hl_phy += [spline_mesh_size(self.splines[s_ind])]
+            self.ha_phy += [spline_mesh_area(self.splines[s_ind])]
+            self.hl_phy_linear += [self.splines[s_ind].\
+                                   projectScalarOntoLinears(self.hl_phy[s_ind])] 
+            self.ha_phy_linear += [self.splines[s_ind].\
+                                   projectScalarOntoLinears(self.ha_phy[s_ind])]
+
+            # self.h_phy_linear += [self.splines[s_ind].\
+            #                       projectScalarOntoLinears(self.h_phy[s_ind])]
+            # self.h_phy_avg += [np.average(self.h_phy_linear[s_ind].vector().get_local())]
 
     def set_init_CPIGA(self, cp_iga):
         """
@@ -316,6 +352,25 @@ class NonMatchingOpt(NonMatchingCoupling):
         for s_ind in range(self.num_splines):
             self.vec_scalar_IGA2FE(cp_iga_sub[s_ind],
                  v2p(self.splines[s_ind].cpFuncs[field].vector()), s_ind)
+
+    def update_h_th_FE(self, h_th_fe_array):
+        """
+        Update splines' thickness functions with input array
+        in FE DoFs
+        """
+        update_nest_vec(h_th_fe_array, self.h_th_fe_nest, 
+                        comm=self.comm)
+
+    def update_h_th_IGA(self, h_th_iga_array):
+        """
+        Update splines' thickness functions with input array
+        in IGA DoFs
+        """
+        update_nest_vec(h_th_iga_array, self.h_th_iga_nest, comm=self.comm)
+        h_th_iga_sub = self.h_th_iga_nest.getNestSubVecs()
+        for s_ind in range(self.num_splines):
+            self.vec_scalar_IGA2FE(h_th_iga_sub[s_ind],
+                 self.h_th_fe_list[s_ind], s_ind)           
 
     def update_h_th(self, h_th_array):
         """
@@ -717,7 +772,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         dRFEdh_th = self.assemble_RFEdh_th()
         dRIGAdh_th_mat = self.extract_nonmatching_mat(dRFEdh_th,
-                         ext_right=False, apply_col_bcs=False)
+                         ext_right=self.var_thickness, right_scalar=True, 
+                         apply_col_bcs=False)
         return dRIGAdh_th_mat
 
     # def dRIGAdxi(self, int_indices_diff=None):
@@ -1022,11 +1078,14 @@ class NonMatchingOpt(NonMatchingCoupling):
         return dRIGAdxi_sub
 
     def create_files(self, save_path="./", folder_name="results/", 
-                     thickness=False):
+                     thickness=False, refine_mesh=False, ref_nel=32):
         """
         Create pvd files for all spline patches' displacements 
         and control points (and thickness is needed).
         """
+        self.refine_mesh = refine_mesh
+        self.save_path = save_path
+        self.folder_name = folder_name
         self.u_file_names = []
         self.u_files = []
         self.F_file_names = []
@@ -1056,26 +1115,98 @@ class NonMatchingOpt(NonMatchingCoupling):
                                       +'_file.pvd',]
                 self.t_files += [File(self.comm, self.t_file_names[i]),]
 
+        # Save results on a refine mesh for better visualization
+        if self.refine_mesh:
+            self.mesh_ref_list = []
+            self.V_ref_list = []
+            self.Vv_ref_list = []
+            self.Au_ref_list = []
+            self.AF_ref_list = []
+            self.u_func_ref_list = [None for s_ind in range(self.num_splines)]
+            self.F_func_ref_list = [[] for s_ind in range(self.num_splines)]
+            if thickness:
+                self.Ah_ref_list = []
+                self.h_th_func_ref_list = [None for s_ind in 
+                                           range(self.num_splines)]
+            for s_ind in range(self.num_splines):
+                self.mesh_ref_list += [UnitSquareMesh(ref_nel, ref_nel),]
+                self.V_ref_list += [FunctionSpace(self.mesh_ref_list[s_ind], 
+                                                  'CG', 1),]
+                self.Vv_ref_list += [VectorFunctionSpace(
+                                     self.mesh_ref_list[s_ind], 
+                                     'CG', 1, dim=3),]
+                self.Au_ref_list += [create_transfer_matrix(
+                                     self.splines[s_ind].V, 
+                                     self.Vv_ref_list[s_ind])]
+                self.AF_ref_list += [create_transfer_matrix(
+                                     self.splines[s_ind].V_control, 
+                                     self.V_ref_list[s_ind])]
+                self.u_func_ref_list[s_ind] = \
+                        Function(self.Vv_ref_list[s_ind])
+                for field in range(3):
+                    self.F_func_ref_list[s_ind] += \
+                        [Function(self.V_ref_list[s_ind])]
+                    if field == 2:
+                        self.F_func_ref_list[s_ind] += \
+                            [Function(self.V_ref_list[s_ind])]
+                if thickness:
+                    self.Ah_ref_list += [create_transfer_matrix(
+                                     self.h_th[s_ind].function_space(),
+                                     self.V_ref_list[s_ind])]
+                    self.h_th_func_ref_list[s_ind] = \
+                        Function(self.V_ref_list[s_ind])
+                
+
     def save_files(self, thickness=False):
         """
         Save splines' displacements and control points to pvd files.
         """
         for i in range(self.num_splines):
-            u_split = self.spline_funcs[i].split()
+            if self.refine_mesh:
+                A_x_b(self.Au_ref_list[i], 
+                      v2p(self.spline_funcs[i].vector()),
+                      v2p(self.u_func_ref_list[i].vector()))
+                u_split = self.u_func_ref_list[i].split()
+            else:
+                u_split = self.spline_funcs[i].split()
+
             for j in range(3):
-                u_split[j].rename('u'+str(i)+'_'+str(j),
-                                  'u'+str(i)+'_'+str(j))
-                self.u_files[i][j] << u_split[j]
-                self.splines[i].cpFuncs[j].rename('F'+str(i)+'_'+str(j),
-                                                  'F'+str(i)+'_'+str(j))
-                self.F_files[i][j] << self.splines[i].cpFuncs[j]
+                u_func = u_split[j]
+                u_func.rename('u'+str(i)+'_'+str(j), 'u'+str(i)+'_'+str(j))
+                self.u_files[i][j] << u_func
+
+                if self.refine_mesh:
+                    A_x_b(self.AF_ref_list[i], 
+                          v2p(self.splines[i].cpFuncs[j].vector()),
+                          v2p(self.F_func_ref_list[i][j].vector()))
+                    f_func = self.F_func_ref_list[i][j]
+                else:
+                    f_func = self.splines[i].cpFuncs[j]
+
+                f_func.rename('F'+str(i)+'_'+str(j), 'F'+str(i)+'_'+str(j))
+                self.F_files[i][j] << f_func
+
                 if j==2:
-                    self.splines[i].cpFuncs[j+1].rename(
-                        'F'+str(i)+'_'+str(j+1), 'F'+str(i)+'_'+str(j+1))
-                    self.F_files[i][j+1] << self.splines[i].cpFuncs[j+1]
+                    if self.refine_mesh:
+                        A_x_b(self.AF_ref_list[i], 
+                              v2p(self.splines[i].cpFuncs[j+1].vector()),
+                              v2p(self.F_func_ref_list[i][j+1].vector()))
+                        w_func = self.F_func_ref_list[i][j+1]
+                    else:
+                        w_func = self.splines[i].cpFuncs[j+1]
+
+                    w_func.rename('F'+str(i)+'_'+str(j+1), 
+                                  'F'+str(i)+'_'+str(j+1))
+                    self.F_files[i][j+1] << w_func
             if thickness:
-                self.h_th[i].rename('t'+str(i), 't'+str(i))
-                self.t_files[i] << self.h_th[i]
+                if self.refine_mesh:
+                    A_x_b(self.Ah_ref_list[i], v2p(self.h_th[i].vector()),
+                          v2p(self.h_th_func_ref_list[i].vector()))
+                    h_th_func = self.h_th_func_ref_list[i]
+                else:
+                    h_th_func = self.h_th[i]
+                h_th_func.rename('t'+str(i), 't'+str(i))
+                self.t_files[i] << h_th_func
 
 if __name__ == '__main__':
     pass

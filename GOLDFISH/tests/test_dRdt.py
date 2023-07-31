@@ -40,7 +40,7 @@ class EqualOrderSplineCustom(EqualOrderSpline):
 COMM = worldcomm
 E = Constant(1.0e7)
 nu = Constant(0.)
-h_th = Constant(0.1)
+# h_th = Constant(0.1)
 
 L = 20.
 w = 2.
@@ -69,17 +69,15 @@ srf0 = create_surf(pts0, int(num_el0/2), num_el0, p0)
 srf1 = create_surf(pts1, int(num_el1/2), num_el1, p1)
 spline0 = create_spline(srf0, num_field, BCs=[0,1])
 spline1 = create_spline(srf1, num_field, BCs=[0,1])
-
 splines = [spline0, spline1]
 
-h_th_list = []
+f = Expression("sin(pi*x[0])*cos(pi*x[1])", degree=2)
+h_th = [Function(spline.V_control) for spline in splines]
 for i in range(len(splines)):
-    h_th_list += [Function(splines[i].V_control)]
-    h_th_list[i].interpolate(Constant(0.1))
+    h_th[i].interpolate(Constant(0.1))
 
-nonmatching_opt = NonMatchingOptFFD(splines, E, h_th_list, nu, 
-                                    opt_shape=True, opt_field=[0,1,2],
-                                    opt_thickness=True, var_thickness=True)
+nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, opt_shape=True, 
+                                 opt_thickness=True, var_thickness=True)
 
 mortar_nels = [2*num_el1]
 nonmatching_opt.create_mortar_meshes(mortar_nels)
@@ -95,11 +93,11 @@ for i in range(nonmatching_opt.num_intersections):
                                      physical_locations[i]),]
 
 nonmatching_opt.mortar_meshes_setup(mapping_list, mortar_mesh_locations,
-                                    penalty_coefficient, 2)
+                                    penalty_coefficient, 1)
 
 source_terms = []
 residuals = []
-f0 = as_vector([Constant(0.), Constant(0.), Constant(0.)])
+f0 = as_vector([Constant(0.), Constant(0.), Constant(1.)])
 for i in range(len(splines)):
     source_terms += [inner(f0, nonmatching_opt.splines[i].\
                      rationalize(nonmatching_opt.spline_test_funcs[i]))\
@@ -107,7 +105,7 @@ for i in range(len(splines)):
     residuals += [SVK_residual(nonmatching_opt.splines[i], 
                                nonmatching_opt.spline_funcs[i], 
                                nonmatching_opt.spline_test_funcs[i], 
-                               E, nu, h_th, source_terms[i])]
+                               E, nu, h_th[i], source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
 
 # PointSource will be applied mpisize times in parallel
@@ -117,3 +115,5 @@ ps_list = [ps0,]
 ps_ind = [0,]
 nonmatching_opt.set_point_sources(point_sources=ps_list, 
                                   point_source_inds=ps_ind)
+
+m = nonmatching_opt.dRIGAdh_th()

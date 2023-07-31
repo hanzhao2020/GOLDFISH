@@ -4,7 +4,7 @@ from GOLDFISH.operations.max_vmstress_exop import *
 import openmdao.api as om
 from openmdao.api import Problem
 
-class MaxvMSressComp(om.ExplicitComponent):
+class MaxvMStressComp(om.ExplicitComponent):
 
     def initialize(self):
         self.options.declare('nonmatching_opt')
@@ -45,6 +45,7 @@ class MaxvMSressComp(om.ExplicitComponent):
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
+        self.var_thickness = self.nonmatching_opt.var_thickness
         if self.opt_shape:
             self.input_cpiga_shape = self.nonmatching_opt.vec_scalar_iga_dof
             self.init_cp_iga = self.nonmatching_opt.get_init_CPIGA()
@@ -53,8 +54,12 @@ class MaxvMSressComp(om.ExplicitComponent):
                 self.input_cp_iga_name_list += \
                     [self.input_cp_iga_name_pre+str(field)]
         if self.opt_thickness:
-            self.input_h_th_shape = self.nonmatching_opt.h_th_dof
-            self.init_h_th = self.nonmatching_opt.init_h_th
+            if self.var_thickness:
+                self.input_h_th_shape = self.nonmatching_opt.vec_scalar_iga_dof
+                self.init_h_th = np.ones(self.nonmatching_opt.vec_scalar_iga_dof)*0.1
+            else:
+                self.input_h_th_shape = self.nonmatching_opt.h_th_dof
+                self.init_h_th = self.nonmatching_opt.init_h_th
 
     def setup(self):
         self.add_output(self.output_max_vM_name)
@@ -80,14 +85,18 @@ class MaxvMSressComp(om.ExplicitComponent):
                 self.nonmatching_opt.update_CPIGA(
                     inputs[self.input_cp_iga_name_list[i]], field)
         if self.opt_thickness:
-            self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
+            if self.var_thickness:
+                self.nonmatching_opt.update_h_th_IGA(
+                                     inputs[self.input_h_th_name])
+            else:
+                self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
         self.nonmatching_opt.update_uIGA(inputs[self.input_u_name])
 
     def compute(self, inputs, outputs):
         self.update_inputs(inputs)
         outputs[self.output_max_vM_name] = self.max_vm_exop.\
                                            max_vM_stress_global()
-        print("Computed Maximum stress:", outputs[self.output_max_vM_name])
+        # print("Computed Maximum stress:", outputs[self.output_max_vM_name])
 
     def compute_partials(self, inputs, partials):
         self.update_inputs(inputs)
@@ -199,14 +208,14 @@ if __name__ == "__main__":
     h_th = []
     expression = Expression("0.1*sin(pi*x[0])*sin(pi*x[1])+0.05", degree=2)
     for i in range(num_surfs):
-        h_th += [Function(splines[i].V_linear)]
+        h_th += [Function(splines[i].V_control)]
         h_th[i].interpolate(Constant(0.1))
         # temp_vec = project(expression, splines[i].V_linear)
         # h_th[i].assign(temp_vec)
 
     # Create non-matching problem
     nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, opt_shape=True, 
-                                        opt_thickness=True, comm=worldcomm)
+                                        opt_thickness=True, var_thickness=True, comm=worldcomm)
     nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
 
     if mpirank == 0:
@@ -237,7 +246,7 @@ if __name__ == "__main__":
     u_iga_array = get_petsc_vec_array(nonmatching_opt.u)
 
     prob = Problem()
-    comp = MaxvMSressComp(nonmatching_opt=nonmatching_opt,
+    comp = MaxvMStressComp(nonmatching_opt=nonmatching_opt,
                           rho=1e2, alpha=0.01, m=1e3, method='pnorm', 
                           linearize_stress=True)
     comp.init_paramters()

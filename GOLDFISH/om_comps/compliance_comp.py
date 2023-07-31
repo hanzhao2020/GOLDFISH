@@ -13,7 +13,7 @@ class ComplianceComp(om.ExplicitComponent):
         self.options.declare('input_u_name', default='displacements')
         self.options.declare('output_c_name', default='w_int')
 
-    def init_paramters(self):
+    def init_paramters(self, c_regu=None):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.forces = self.options['forces']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
@@ -21,7 +21,7 @@ class ComplianceComp(om.ExplicitComponent):
         self.output_c_name = self.options['output_c_name']
 
         self.c_exop = ComplianceExOperation(self.nonmatching_opt,
-                                            self.forces)
+                                            self.forces, c_regu)
 
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape

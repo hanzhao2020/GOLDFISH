@@ -1,50 +1,51 @@
 from GOLDFISH.nonmatching_opt_ffd import *
-
 import openmdao.api as om
 from openmdao.api import Problem
 
-class FFD2SurfComp(om.ExplicitComponent):
+
+class CPFFDReguComp(om.ExplicitComponent):
 
     def initialize(self):
         self.options.declare('nonmatching_opt_ffd')
         self.options.declare('input_cpffd_name_pre', default='CP_FFD')
-        self.options.declare('output_cpsurf_name_pre', default='CP_FE')
+        self.options.declare('output_cpregu_name_pre', default='CP_FFD_regu')
 
     def init_paramters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.options['input_cpffd_name_pre']
-        self.output_cpsurf_name_pre = self.options['output_cpsurf_name_pre']
+        self.output_cpregu_name_pre = self.options['output_cpregu_name_pre']
 
-        self.deriv = self.nonmatching_opt_ffd.dcpsurf_fedcpffd
         self.opt_field = self.nonmatching_opt_ffd.opt_field
-        self.nsd = self.nonmatching_opt_ffd.nsd
-        self.knotsffd = self.nonmatching_opt_ffd.knotsffd
-        self.input_shape = self.nonmatching_opt_ffd.cpffd_size
-        self.output_shape = self.nonmatching_opt_ffd.cpsurf_fe_list.shape[0]
+        self.input_shape = self.nonmatching_opt_ffd.shopt_cpffd_size
+        self.output_shapes = self.nonmatching_opt_ffd.shopt_cpregu_sizes
+        self.derivs = self.nonmatching_opt_ffd.shopt_dcpregudcpffd_list
 
         self.input_cpffd_name_list = []
-        self.output_cpsurf_name_list = []
+        self.output_cpregu_name_list = []
         for i, field in enumerate(self.opt_field):
-            self.input_cpffd_name_list += [self.input_cpffd_name_pre+str(field)]
-            self.output_cpsurf_name_list += [self.output_cpsurf_name_pre+str(field)]
+            self.input_cpffd_name_list += \
+                [self.input_cpffd_name_pre+str(field)]
+            self.output_cpregu_name_list += \
+                [self.output_cpregu_name_pre+str(field)]
 
     def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cpffd_name_list[i],
                            shape=self.input_shape,
-                           val=self.nonmatching_opt_ffd.cpffd_flat[:,field])
-            self.add_output(self.output_cpsurf_name_list[i],
-                            shape=self.output_shape)
-            self.declare_partials(self.output_cpsurf_name_list[i],
+                           val=self.nonmatching_opt_ffd.\
+                           shopt_cpffd_flat[:,field])
+            self.add_output(self.output_cpregu_name_list[i],
+                            shape=self.output_shapes[i])
+            self.declare_partials(self.output_cpregu_name_list[i],
                                   self.input_cpffd_name_list[i],
-                                  val=self.deriv.data,
-                                  rows=self.deriv.row,
-                                  cols=self.deriv.col)
+                                  val=self.derivs[i].data,
+                                  rows=self.derivs[i].row,
+                                  cols=self.derivs[i].col)
 
     def compute(self, inputs, outputs):
         for i, field in enumerate(self.opt_field):
-            outputs[self.output_cpsurf_name_list[i]] = \
-                self.deriv*inputs[self.input_cpffd_name_list[i]]
+            outputs[self.output_cpregu_name_list[i]] = \
+                self.derivs[i]*inputs[self.input_cpffd_name_list[i]]
 
 
 if __name__ == "__main__":
@@ -60,10 +61,12 @@ if __name__ == "__main__":
         cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
         cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
     FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
+    nonmatching_opt.set_shopt_FFD(FFD_block.knots, FFD_block.control)
+    nonmatching_opt.set_shopt_regu_CPFFD(shopt_regu_dir=[None, None, None],
+                                         shopt_regu_side=[None, None, None])
 
     prob = Problem()
-    comp = FFD2SurfComp(nonmatching_opt_ffd=nonmatching_opt)
+    comp = CPFFDReguComp(nonmatching_opt_ffd=nonmatching_opt)
     comp.init_paramters()
     prob.model = comp
     prob.setup()
