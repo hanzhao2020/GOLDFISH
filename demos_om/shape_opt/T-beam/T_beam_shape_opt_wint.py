@@ -14,6 +14,7 @@ class ShapeOptGroup(om.Group):
         self.options.declare('cpsurf_iga_name_pre', default='CPS_IGA')
         self.options.declare('disp_name', default='displacements')
         self.options.declare('int_energy_name', default='int_E')
+        self.options.declare('cpffd_align_name_pre', default='CP_FFD_align')
         self.options.declare('cpffd_pin_name_pre', default='CP_FFD_pin')
         self.options.declare('cpffd_regu_name_pre', default='CP_FFD_regu')
         self.options.declare('volume_name', default='volume')
@@ -25,23 +26,26 @@ class ShapeOptGroup(om.Group):
         self.cpsurf_iga_name_pre = self.options['cpsurf_iga_name_pre']
         self.disp_name = self.options['disp_name']
         self.int_energy_name = self.options['int_energy_name']
+        self.cpffd_align_name_pre = self.options['cpffd_align_name_pre']
         self.cpffd_pin_name_pre = self.options['cpffd_pin_name_pre']
         self.cpffd_regu_name_pre = self.options['cpffd_regu_name_pre']
         self.volume_name = self.options['volume_name']
 
         self.opt_field = self.nonmatching_opt_ffd.opt_field
-        self.design_var_lower = -10.
-        self.design_var_upper = 1.e-4
+        self.design_var_lower = -1.2
+        self.design_var_upper = 1.2
 
         self.cpffd_name_list = []
         self.cpsurf_fe_name_list = []
         self.cpsurf_iga_name_list = []
         self.cpffd_pin_name_list = []
         self.cpffd_regu_name_list = []
+        self.cpffd_align_name_list = []
         for i, field in enumerate(self.opt_field):
             self.cpffd_name_list += [self.cpffd_name_pre+str(field)]
             self.cpsurf_fe_name_list += [self.cpsurf_fe_name_pre+str(field)]
             self.cpsurf_iga_name_list += [self.cpsurf_iga_name_pre+str(field)]
+            self.cpffd_align_name_list += [self.cpffd_align_name_pre+str(field)]
             self.cpffd_pin_name_list += [self.cpffd_pin_name_pre+str(field)]
             self.cpffd_regu_name_list += [self.cpffd_regu_name_pre+str(field)]
 
@@ -50,21 +54,23 @@ class ShapeOptGroup(om.Group):
         self.cpfe2iga_comp_name = 'CPFE2IGA_comp'
         self.disp_states_comp_name = 'disp_states_comp'
         self.int_energy_comp_name = 'internal_energy_comp'
+        self.cpffd_align_comp_name = 'CPFFD_align_comp'
         self.cpffd_pin_comp_name = 'CPFFD_pin_comp'
         self.cpffd_regu_comp_name = 'CPFFD_regu_comp'
         self.volume_comp_name = 'volume_comp'
+
 
     def setup(self):
         # Add inputs comp
         inputs_comp = om.IndepVarComp()
         for i, field in enumerate(self.opt_field):
             inputs_comp.add_output(self.cpffd_name_list[i],
-                        shape=self.nonmatching_opt_ffd.cpffd_size,
-                        val=self.nonmatching_opt_ffd.cpffd_flat[:,field])
+                        shape=self.nonmatching_opt_ffd.shopt_cpffd_size,
+                        val=self.nonmatching_opt_ffd.shopt_cpffd_flat[:,field])
         self.add_subsystem(self.inputs_comp_name, inputs_comp)
 
         # Add FFD comp
-        self.ffd2surf_comp = FFD2SurfComp(
+        self.ffd2surf_comp = CPFFD2SurfComp(
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_cpffd_name_pre=self.cpffd_name_pre,
                         output_cpsurf_name_pre=self.cpsurf_fe_name_pre)
@@ -84,7 +90,8 @@ class ShapeOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                            output_u_name=self.disp_name)
-        self.disp_states_comp.init_paramters(save_files=True)
+        self.disp_states_comp.init_paramters(save_files=True,
+                                             nonlinear_solver_rtol=1e-3)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
         # Add internal energy comp (objective function)
@@ -96,6 +103,16 @@ class ShapeOptGroup(om.Group):
         self.int_energy_comp.init_paramters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
+        # Add CP FFD align comp (linear constraint)
+        self.cpffd_align_comp = CPFFDAlignComp(
+            nonmatching_opt_ffd=self.nonmatching_opt_ffd,
+            input_cpffd_name_pre=self.cpffd_name_pre,
+            output_cpalign_name_pre=self.cpffd_align_name_pre)
+        self.cpffd_align_comp.init_paramters()
+        self.add_subsystem(self.cpffd_align_comp_name, self.cpffd_align_comp)
+        self.cpffd_align_cons_val = \
+            np.zeros(self.cpffd_align_comp.output_shape)
+
         # Add CP FFD pin comp (linear constraint)
         self.cpffd_pin_comp = CPFFDPinComp(
                          nonmatching_opt_ffd=self.nonmatching_opt_ffd,
@@ -105,8 +122,8 @@ class ShapeOptGroup(om.Group):
         self.add_subsystem(self.cpffd_pin_comp_name, self.cpffd_pin_comp)
         self.cpffd_pin_cons_val = []
         for i, field in enumerate(self.opt_field):
-            self.cpffd_pin_cons_val += [self.nonmatching_opt_ffd.cpffd_flat
-                                [:,field][self.nonmatching_opt_ffd.pin_dof]]
+            self.cpffd_pin_cons_val += [self.nonmatching_opt_ffd.shopt_cpffd_flat
+                                [:,field][self.nonmatching_opt_ffd.shopt_pin_dof]]
 
         # Add CP FFD regu comp (linear constraint)
         self.cpffd_regu_comp = CPFFDReguComp(
@@ -116,7 +133,7 @@ class ShapeOptGroup(om.Group):
         self.cpffd_regu_comp.init_paramters()
         self.add_subsystem(self.cpffd_regu_comp_name, self.cpffd_regu_comp)
         self.cpffd_regu_lower = [np.ones(self.cpffd_regu_comp.\
-                                 output_shapes[i])*0.4
+                                 output_shapes[i])*1.e-1
                                  for i in range(len(self.opt_field))]
 
         # Add volume comp (constraint)
@@ -158,6 +175,10 @@ class ShapeOptGroup(om.Group):
             # For constraints
             self.connect(self.inputs_comp_name+'.'
                          +self.cpffd_name_list[i],
+                         self.cpffd_align_comp_name +'.'
+                         +self.cpffd_name_list[i])
+            self.connect(self.inputs_comp_name+'.'
+                         +self.cpffd_name_list[i],
                          self.cpffd_pin_comp_name+'.'
                          +self.cpffd_name_list[i])
             self.connect(self.inputs_comp_name+'.'
@@ -174,6 +195,9 @@ class ShapeOptGroup(om.Group):
                                 +self.cpffd_name_list[i],
                                 lower=self.design_var_lower,
                                 upper=self.design_var_upper)
+            self.add_constraint(self.cpffd_align_comp_name+'.'
+                                +self.cpffd_align_name_list[i],
+                                equals=self.cpffd_align_cons_val[i])
             self.add_constraint(self.cpffd_pin_comp_name+'.'
                                 +self.cpffd_pin_name_list[i],
                                 equals=self.cpffd_pin_cons_val[i])
@@ -228,12 +252,13 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3,
 
 optimizer = 'SLSQP'
 # optimizer = 'SNOPT'
-opt_field = [2]
-ffd_block_num_el = [1,4,1]
+opt_field = [0]
+ffd_block_num_el = [3,1,2]
+p_ffd = 3
 save_path = './'
 folder_name = "results/"
 
-filename_igs = "./geometry/init_Tbeam_geom.igs"
+filename_igs = "./geometry/init_Tbeam_geom_moved.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
 occ_surf_list = [topoface2surface(face, BSpline=True) 
                  for face in igs_shapes]
@@ -250,29 +275,18 @@ pressure = Constant(1.)
 
 fields0 = [None, [[0,1,2]],]
 spline_bc0 = SplineBC(directions=[1], sides=[None, [0]],
-                     fields=fields0, n_layers=[None, [1]])
+                      fields=fields0, n_layers=[None, [1]])
 spline_bcs = [spline_bc0,]*2
 
 # Geometry preprocessing and surface-surface intersections computation
 preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
                                 refine=False)
 print("Computing intersections...")
-int_data_filename = "int_data.npz"
-if os.path.isfile(int_data_filename):
-    preprocessor.load_intersections_data(int_data_filename)
-else:
-    preprocessor.compute_intersections(mortar_refine=2)
-    preprocessor.save_intersections_data(int_data_filename)
+preprocessor.compute_intersections(mortar_refine=2)
 
 if mpirank == 0:
     print("Total DoFs:", preprocessor.total_DoFs)
     print("Number of intersections:", preprocessor.num_intersections_all)
-
-# Display B-spline surfaces and intersections using 
-# PythonOCC build-in 3D viewer.
-# display, start_display, add_menu, add_function_to_menu = init_display()
-# preprocessor.display_surfaces(display, save_fig=False)
-# preprocessor.display_intersections(display, save_fig=False)
 
 if mpirank == 0:
     print("Creating splines...")
@@ -309,21 +323,21 @@ nonmatching_opt_ffd.set_residuals(residuals)
 
 # Create FFD block in igakit format
 cp_ffd_lims = nonmatching_opt_ffd.cpsurf_lims
-for field in [2]:
-    cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
-    cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
-FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
+FFD_block = create_3D_block(ffd_block_num_el, p_ffd, cp_ffd_lims)
 
 # Set FFD to non-matching optimization instance
-nonmatching_opt_ffd.set_FFD(FFD_block.knots, FFD_block.control)
+nonmatching_opt_ffd.set_shopt_FFD(FFD_block.knots, FFD_block.control)
 # Set constraint info
-nonmatching_opt_ffd.set_pin_CPFFD(pin_dir0=2, pin_side0=[1],
-                                  pin_dir1=1, pin_side1=[1])
-nonmatching_opt_ffd.set_regu_CPFFD(regu_dir=[None], regu_side=[None])
+nonmatching_opt_ffd.set_shopt_align_CPFFD(shopt_align_dir=[1])
+nonmatching_opt_ffd.set_shopt_pin_CPFFD(pin_dir0=0, pin_side0=[0,1],
+                                        pin_dir1=1, pin_side1=[0])
+nonmatching_opt_ffd.set_shopt_regu_CPFFD(shopt_regu_dir=[None], 
+                                         shopt_regu_side=[None],
+                                         shopt_regu_align=[1])
 
 # Set up optimization
 nonmatching_opt_ffd.create_files(save_path=save_path, 
-                                 folder_name=folder_name)
+                                 folder_name=folder_name,) 
 model = ShapeOptGroup(nonmatching_opt_ffd=nonmatching_opt_ffd)
 model.init_paramters()
 prob = om.Problem(model=model)
@@ -333,7 +347,7 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.options['optimizer'] = 'SNOPT'
     prob.driver.opt_settings['Minor feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
-    prob.driver.opt_settings['Major optimality tolerance'] = 1e-6
+    prob.driver.opt_settings['Major optimality tolerance'] = 1e-5
     prob.driver.opt_settings['Major iterations limit'] = 50000
     prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
     prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
@@ -342,32 +356,54 @@ if optimizer.upper() == 'SNOPT':
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
-    prob.driver.options['tol'] = 1e-8
+    prob.driver.options['tol'] = 1e-15
     prob.driver.options['disp'] = True
     prob.driver.options['debug_print'] = ['objs']
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
+# Create a recorder variable
+recorder_name = './recorder.sql'
+FFD_data_name = './FFD_data.npz'
+
+prob.driver.recording_options['includes'] = ['*']
+prob.driver.recording_options['record_objectives'] = True
+prob.driver.recording_options['record_derivatives'] = True
+prob.driver.recording_options['record_constraints'] = True
+prob.driver.recording_options['record_desvars'] = True
+prob.driver.recording_options['record_inputs'] = True
+prob.driver.recording_options['record_outputs'] = True
+prob.driver.recording_options['record_residuals'] = True
+
+recorder = om.SqliteRecorder(recorder_name)
+prob.driver.add_recorder(recorder)
+
 prob.setup()
+# prob.set_solver_print(0)
 prob.run_driver()
 
-if mpirank == 0:
-    print("Maximum F2: {:8.6f}".
-          format(np.max(nonmatching_opt_ffd.splines[0].cpFuncs[2]
-                 .vector().get_local())))
-    print("Miminum F2: {:8.6f}".
-          format(np.min(nonmatching_opt_ffd.splines[1].cpFuncs[2]
-                 .vector().get_local())))
+major_iter_inds = model.disp_states_comp.func_eval_major_ind
+np.savez(FFD_data_name, opt_field=opt_field,
+                        major_iter_ind=major_iter_inds,
+                        ffd_control=FFD_block.control,
+                        ffd_knots=FFD_block.knots,
+                        QoI=0)
+# for i in range(num_surfs):
+#     max_F0 = np.max(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
+#     min_F0 = np.min(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
+#     print("Spline: {:2d}, Max F0: {:8.6f}".format(i, max_F0))
+#     print("Spline: {:2d}, Min F0: {:8.6f}".format(i, min_F0))
 
-#### Save final shape of FFD block
-VTK().write("./geometry/FFD_block_initial.vtk", FFD_block)
-init_CP_FFD = FFD_block.control[:,:,:,0:3].transpose(2,1,0,3).reshape(-1,3)
-final_CP_FFD = init_CP_FFD.copy()
-final_FFD_CP2 = prob[model.inputs_comp_name+'.'+model.cpffd_name_list[0]]
-final_CP_FFD[:,2] = final_FFD_CP2
-final_CP_FFD = final_CP_FFD.reshape(FFD_block.control[:,:,:,0:3]\
-               .transpose(2,1,0,3).shape)
-final_CP_FFD = final_CP_FFD.transpose(2,1,0,3)
-final_FFD_block = NURBS(FFD_block.knots, final_CP_FFD)
-VTK().write('./geometry/FFD_block_final.vtk', final_FFD_block)
+xi0_coord = np.linspace(0.,1.,101)
+xi1_coord = 1
+x_coord = np.zeros(101)
+for i in range(101):
+    x_coord[i] = nonmatching_opt_ffd.splines[1].cpFuncs[0](
+                                     [xi0_coord[i], xi1_coord])
+
+import matplotlib.pyplot as plt
+plt.figure()
+plt.plot(x_coord, xi0_coord)
+plt.xlim([-1,1])
+plt.show()
