@@ -12,7 +12,7 @@ class ThicknessOptGroup(om.Group):
         self.options.declare('h_th_name_design', default='thickness')
         self.options.declare('h_th_name_full', default='thickness_full')
         self.options.declare('disp_name', default='displacements')
-        self.options.declare('max_vM_name', default='max_vM_stress')
+        self.options.declare('int_energy_name', default='w_int')
         self.options.declare('volume_name', default='volume')
 
     def init_paramters(self):
@@ -21,7 +21,7 @@ class ThicknessOptGroup(om.Group):
         self.h_th_name_full = self.options['h_th_name_full']
         self.disp_name = self.options['disp_name']
         self.volume_name = self.options['volume_name']
-        self.max_vM_name = self.options['max_vM_name']
+        self.int_energy_name = self.options['int_energy_name']
 
         self.design_var_lower = 2e-3
         self.design_var_upper = 5e-2
@@ -34,7 +34,7 @@ class ThicknessOptGroup(om.Group):
         self.h_th_map_comp_name = 'h_th_map_comp'
         self.disp_states_comp_name = 'disp_states_comp'
         self.volume_comp_name = 'volume_comp'
-        self.max_vM_comp_name = 'max_vM_comp'
+        self.int_energy_comp_name = 'int_energy_comp'
 
     def setup(self):
         # Add inputs comp
@@ -59,6 +59,15 @@ class ThicknessOptGroup(om.Group):
         self.disp_states_comp.init_paramters(save_files=True)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
+        # Add internal energy comp (objective function)
+        self.int_energy_comp = IntEnergyComp(
+                          nonmatching_opt=self.nonmatching_opt,
+                          input_h_th_name=self.h_th_name_full,
+                          input_u_name=self.disp_name,
+                          output_wint_name=self.int_energy_name)
+        self.int_energy_comp.init_paramters()
+        self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
+
         # Add volume comp (objective function)
         self.volume_comp = VolumeComp(
                            nonmatching_opt=self.nonmatching_opt,
@@ -71,38 +80,29 @@ class ThicknessOptGroup(om.Group):
             self.vol_val += assemble(self.nonmatching_opt.h_th[s_ind]
                             *self.nonmatching_opt.splines[s_ind].dx)
 
-        # Add max von Mises stress comp (constraint)
-        surf = 'top'
-        rho = 1e2
-        upper_vM = 1e6
-        self.max_vM_comp = MaxvMStressComp(nonmatching_opt=nonmatching_opt,
-                           rho=rho, alpha=None, m=upper_vM, surf=surf,
-                           method='pnorm', linearize_stress=False, 
-                           input_u_name=self.disp_name,
-                           input_h_th_name=self.h_th_name_full,
-                           output_max_vM_name=self.max_vM_name)
-        self.max_vM_comp.init_paramters()
-        self.add_subsystem(self.max_vM_comp_name, self.max_vM_comp)
-
         # Connect names between components
         self.connect(self.inputs_comp_name+'.'
                      +self.h_th_name_design,
                      self.h_th_map_comp_name+'.'
                      +self.h_th_name_design)
+
         self.connect(self.h_th_map_comp_name+'.'
                      +self.h_th_name_full,
                      self.disp_states_comp_name+'.'
                      +self.h_th_name_full)
+
         self.connect(self.h_th_map_comp_name+'.'
                      +self.h_th_name_full,
                      self.volume_comp_name+'.'
                      +self.h_th_name_full)
+
         self.connect(self.h_th_map_comp_name+'.'
                      +self.h_th_name_full,
-                     self.max_vM_comp_name+'.'
+                     self.int_energy_comp_name+'.'
                      +self.h_th_name_full)
+
         self.connect(self.disp_states_comp_name+'.'+self.disp_name,
-                     self.max_vM_comp_name+'.'+self.disp_name)
+                     self.int_energy_comp_name+'.'+self.disp_name)
 
         # Add design variable, constraints and objective
         self.add_design_var(self.inputs_comp_name+'.'
@@ -111,15 +111,13 @@ class ThicknessOptGroup(om.Group):
                             upper=self.design_var_upper,
                             scaler=1e2)
 
-        self.add_constraint(self.max_vM_comp_name+'.'
-                            +self.max_vM_name,
-                            upper=upper_vM,
-                            scaler=1e-6)
-        # Use scaler 1e10 for SNOPT optimizer, 1e8 for SLSQP
-        self.add_objective(self.volume_comp_name+'.'
-                           +self.volume_name,
-                           scaler=1.e3)
+        self.add_constraint(self.volume_comp_name+'.'
+                            +self.volume_name,
+                            equals=self.vol_val)
 
+        self.add_objective(self.int_energy_comp_name+'.'
+                           +self.int_energy_name,
+                           scaler=1e3)
 
 def clampedBC(spline_generator, side=0, direction=0):
     """
@@ -150,32 +148,35 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-optimizer = 'SLSQP'
-# optimizer = 'SNOPT'
+# optimizer = 'SLSQP'
+optimizer = 'SNOPT'
 
 save_path = './'
 folder_name = "results/"
 
-# Define material, gemetric and coupling parameters
+
 geom_scale = 1.  # Convert current length unit to m
 E = Constant(68e9)  # Young's modulus, Pa
 nu = Constant(0.35)  # Poisson's ratio
+h_th_val = Constant(1.0e-2)  # Thickness of surfaces, m
 
-p = 3  # spline order
+# p = 3  # spline order
 penalty_coefficient = 1.0e3
 
 print("Importing geometry...")
-filename_igs = "./geometry/plate_geometry.igs"
+filename_igs = "./geometry/plate_geometry_cubic.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
 plate_surfaces = [topoface2surface(face, BSpline=True) 
                   for face in igs_shapes]
+
 num_surfs = len(plate_surfaces)
 if mpirank == 0:
     print("Number of surfaces:", num_surfs)
 
-# Geometry preprocessing and surface--surface intersections computation
+# Geometry preprocessing and surface-surface intersections computation
 preprocessor = OCCPreprocessing(plate_surfaces, reparametrize=False, 
                                 refine=False)
+
 if mpirank == 0:
     print("Computing intersections...")
 int_data_filename = "plate_int_data.npz"
@@ -206,7 +207,6 @@ for i in range(num_surfs):
                  preprocessor.BSpline_surfs[i], index=i)
         splines += [spline,]
 
-# Initial thickness in linear function space
 h_th = []
 h_val_list = [1e-2]*num_surfs
 for i in range(num_surfs):
@@ -222,25 +222,32 @@ if mpirank == 0:
     print("Setting up mortar meshes...")
 
 nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
-                                    preprocessor.intersections_para_coords, 
-                                    penalty_coefficient)
+                            preprocessor.intersections_para_coords, 
+                            penalty_coefficient)
 
 # Define magnitude of load
-load = Constant(-100)
+load = Constant(-100) # The load should be in the unit of N/m^3
 f1 = as_vector([Constant(0.0), Constant(0.0), load])
+f0 = as_vector([Constant(0.0), Constant(0.0), Constant(0.0)])
+
+xi5 = nonmatching_opt.splines[5].parametricCoordinates()
+bdry1 = conditional(gt(xi5[0],1.-1e-3), Constant(1.), Constant(0.))
+
+f_list = [f0]*(num_surfs-1) + [f1*bdry1]
 
 # Distributed downward load
-loads = [f1]*num_surfs
+# loads = [f1]*num_surfs
 source_terms = []
 residuals = []
 for i in range(num_surfs):
-    source_terms += [inner(loads[i], nonmatching_opt.splines[i].rationalize(
-        nonmatching_opt.spline_test_funcs[i]))*nonmatching_opt.splines[i].dx]
+    source_terms += [inner(f_list[i], nonmatching_opt.splines[i].rationalize(
+        nonmatching_opt.spline_test_funcs[i]))*nonmatching_opt.splines[i].ds]
     residuals += [SVK_residual(nonmatching_opt.splines[i], 
                                nonmatching_opt.spline_funcs[i], 
                                nonmatching_opt.spline_test_funcs[i], 
                                E, nu, h_th[i], source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
+
 
 if mpirank == 0:
     print("Solving linear non-matching problem ...")
@@ -258,16 +265,16 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.options['optimizer'] = 'SNOPT'
     prob.driver.opt_settings['Minor feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
-    prob.driver.opt_settings['Major optimality tolerance'] = 1e-5
+    prob.driver.opt_settings['Major optimality tolerance'] = 1e-6
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
-    prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
+    prob.driver.opt_settings['Summary file'] = './SNOPT_report/SNOPT_summary.out'
+    prob.driver.opt_settings['Print file'] = './SNOPT_report/SNOPT_print.out'
     prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
-    prob.driver.options['tol'] = 1e-6
+    prob.driver.options['tol'] = 1e-8
     prob.driver.options['disp'] = True
     prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['maxiter'] = 50000
@@ -282,30 +289,29 @@ if mpirank == 0:
         print("Thickness for patch {:2d}: {:10.6f}".format(i, 
               nonmatching_opt.h_th[i].vector().get_local()[0]))
 
-von_Mises_funcs = []
-vM_max_list = []
-for i in range(nonmatching_opt.num_splines):
-    von_Mises_proj = nonmatching_opt.splines[i].projectScalarOntoLinears(
-                     model.max_vM_comp.max_vm_exop.vMstress[i], lumpMass=False)
-    von_Mises_funcs += [von_Mises_proj,]
-    vM_max_list += [v2p(von_Mises_funcs[i].vector()).max()[1]]
-
-print("True max stress:", np.max(vM_max_list))
+save_disp = True
 
 if mpirank == 0:
     print("Saving results...")
 
-save_disp = True
-save_stress = True
 if save_disp:
     for i in range(nonmatching_opt.num_splines):
         save_results(splines[i], nonmatching_opt.spline_funcs[i], i, 
                      save_path=save_path, folder=folder_name, 
                      save_cpfuncs=True, comm=worldcomm)
 
-if save_stress:
-    for i in range(nonmatching_opt.num_splines):
-        von_Mises_funcs[i].rename("von_Mises_top_"+str(i), 
-                                 "von_Mises_top_"+str(i))
-        File(save_path+folder_name+"von_Mises_top_"+str(i)+".pvd") \
-            << von_Mises_funcs[i]
+h_th_profile = []
+num_pts = 101
+xi0_array = np.linspace(0,1,num_pts)
+xi1 = 0.5
+for i in range(num_surfs):
+    for xi_ind in range(num_pts):
+        h_th_profile += [nonmatching_opt.h_th[i]((xi0_array[xi_ind], xi1))]
+
+x0_array = np.linspace(0.,1.,num_pts*num_surfs)
+np.savez("h_th_profile.npz", h=h_th_profile, x=x0_array)
+
+import matplotlib.pyplot as plt
+plt.figure()
+plt.plot(x0_array, h_th_profile, '--')
+plt.show()
