@@ -23,10 +23,10 @@ class HthFFDReguComp(om.ExplicitComponent):
 
         if self.nonmatching_opt_ffd.thopt_multiffd:
             # self.deriv = self.nonmatching_opt_ffd.thopt_dcpaligndcpmultiffd
-            self.init_val = self.nonmatching_opt_ffd.get_init_h_th_multiFFD()
+            self.init_h_th_ffd = self.nonmatching_opt_ffd.get_init_h_th_multiFFD()
         else:
             # self.deriv = self.nonmatching_opt_ffd.thopt_dcpaligndcpffd
-            self.init_val = self.nonmatching_opt_ffd.get_init_h_th_FFD()
+            self.init_h_th_ffd = self.nonmatching_opt_ffd.get_init_h_th_FFD()
 
         # self.input_cpffd_name_list = []
         # self.output_cpregu_name_list = []
@@ -39,7 +39,7 @@ class HthFFDReguComp(om.ExplicitComponent):
     def setup(self):
         self.add_input(self.input_h_th_name,
                        shape=self.input_shape,
-                       val=self.init_val)
+                       val=self.init_h_th_ffd)
         self.add_output(self.output_h_th_regu_name,
                         shape=self.output_shape)
         self.declare_partials(self.output_h_th_regu_name,

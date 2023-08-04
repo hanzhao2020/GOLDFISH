@@ -17,10 +17,10 @@ class DispStatesComp(om.ImplicitComponent):
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.input_h_th_name = self.options['input_h_th_name']
         self.output_u_name = self.options['output_u_name']
+        self.save_files = save_files
         self.nonlinear_solver_max_it = nonlinear_solver_max_it
         self.nonlinear_solver_rtol = nonlinear_solver_rtol
         
-        self.save_files = save_files
         self.major_iter_ind = 0
         self.func_eval_ind = 0
         self.func_eval_major_ind = []
@@ -87,7 +87,6 @@ class DispStatesComp(om.ImplicitComponent):
         outputs[self.output_u_name] = self.disp_state_imop.solve_nonlinear(
                                       self.nonlinear_solver_max_it,
                                       self.nonlinear_solver_rtol)
-        
         self.func_eval_ind += 1
         # if self.save_files:
         #     self.nonmatching_opt.save_files(
@@ -99,8 +98,8 @@ class DispStatesComp(om.ImplicitComponent):
 
         if self.save_files:
             self.func_eval_major_ind += [self.func_eval_ind-1]
-            print("**** Saving pvd files, ind: {:6d} ****"
-                  .format(self.major_iter_ind))
+            # print("**** Saving pvd files, ind: {:6d} ****"
+            #       .format(self.major_iter_ind))
             self.nonmatching_opt.save_files(
                 thickness=self.opt_thickness)
             self.major_iter_ind += 1

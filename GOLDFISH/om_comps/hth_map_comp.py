@@ -45,7 +45,6 @@ class HthMapComp(om.ExplicitComponent):
         outputs[self.output_h_th_name_full] = \
             self.deriv_mat*inputs[self.input_h_th_name_design]
 
-
     def get_derivative(self, coo=True):
         diag_vecs = []
         for s_ind in range(self.num_splines):
