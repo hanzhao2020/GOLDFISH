@@ -4,7 +4,7 @@ import csdl
 from csdl import Model, CustomExplicitOperation
 from csdl_om import Simulator
 
-class FFD2SurfModel(Model):
+class CPFFD2SurfModel(Model):
 
     def initialize(self):
         self.parameters.declare('nonmatching_opt_ffd')
@@ -16,7 +16,7 @@ class FFD2SurfModel(Model):
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cpsurf_name_pre = \
             self.parameters['output_cpsurf_name_pre']
-        self.op = FFD2SurfOperation(
+        self.op = CPFFD2SurfOperation(
                   nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                   input_cpffd_name_pre=self.input_cpffd_name_pre,
                   output_cpsurf_name_pre=self.output_cpsurf_name_pre)
@@ -28,7 +28,8 @@ class FFD2SurfModel(Model):
             cpffd_list[i] = self.declare_variable(
                             self.op.input_cpffd_name_list[i],
                             shape=(self.op.input_shape),
-                            val=self.nonmatching_opt_ffd.cpffd_flat[:,field])
+                            val=self.nonmatching_opt_ffd.
+                                     shopt_cpffd_flat[:,field])
         cpsurf_fe_list = csdl.custom(*cpffd_list, op=self.op)
         if not isinstance(cpsurf_fe_list, (list, tuple)):
             cpsurf_fe_list = [cpsurf_fe_list]
@@ -37,7 +38,7 @@ class FFD2SurfModel(Model):
             cpsurf_fe_list[i])
 
 
-class FFD2SurfOperation(CustomExplicitOperation):
+class CPFFD2SurfOperation(CustomExplicitOperation):
 
     def initialize(self):
         self.parameters.declare('nonmatching_opt_ffd')
@@ -50,12 +51,19 @@ class FFD2SurfOperation(CustomExplicitOperation):
         self.output_cpsurf_name_pre = \
             self.parameters['output_cpsurf_name_pre']
 
-        self.deriv = self.nonmatching_opt_ffd.dcpsurf_fedcpffd
+        # self.deriv = self.nonmatching_opt_ffd.dcpsurf_fedcpffd
+        # self.opt_field = self.nonmatching_opt_ffd.opt_field
+        # self.nsd = self.nonmatching_opt_ffd.nsd
+        # self.knotsffd = self.nonmatching_opt_ffd.knotsffd
+
+        # self.input_shape = self.nonmatching_opt_ffd.cpffd_size
+        # self.output_shape = self.nonmatching_opt_ffd.cpsurf_fe_list.shape[0]
+
+        self.deriv = self.nonmatching_opt_ffd.shopt_dcpsurf_fedcpffd
         self.opt_field = self.nonmatching_opt_ffd.opt_field
         self.nsd = self.nonmatching_opt_ffd.nsd
-        self.knotsffd = self.nonmatching_opt_ffd.knotsffd
-
-        self.input_shape = self.nonmatching_opt_ffd.cpffd_size
+        self.knotsffd = self.nonmatching_opt_ffd.shopt_knotsffd
+        self.input_shape = self.nonmatching_opt_ffd.shopt_cpffd_size
         self.output_shape = self.nonmatching_opt_ffd.cpsurf_fe_list.shape[0]
 
         self.input_cpffd_name_list = []
@@ -97,9 +105,9 @@ if __name__ == "__main__":
         cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
         cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
     FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
+    nonmatching_opt.set_shopt_FFD(FFD_block.knots, FFD_block.control)
 
-    m = FFD2SurfModel(nonmatching_opt_ffd=nonmatching_opt)
+    m = CPFFD2SurfModel(nonmatching_opt_ffd=nonmatching_opt)
     m.init_paramters()
     sim = Simulator(m)
     sim.run()

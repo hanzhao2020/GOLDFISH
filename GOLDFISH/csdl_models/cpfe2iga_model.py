@@ -1,10 +1,9 @@
 from GOLDFISH.nonmatching_opt_ffd import *
 from GOLDFISH.operations.cpfe2iga_imop import *
 
-from csdl import Model, CustomImplicitOperation
 import csdl
+from csdl import Model, CustomImplicitOperation
 from csdl_om import Simulator
-
 
 class CPFE2IGAModel(Model):
 
@@ -166,16 +165,16 @@ if __name__ == "__main__":
     from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
 
-    ffd_block_num_el = [4,4,1]
-    p = 3
-    # Create FFD block in igakit format
-    cp_ffd_lims = nonmatching_opt.cpsurf_lims
-    for field in [2]:
-        cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
-        cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
-        cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
-    FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
+    # ffd_block_num_el = [4,4,1]
+    # p = 3
+    # # Create FFD block in igakit format
+    # cp_ffd_lims = nonmatching_opt.cpsurf_lims
+    # for field in [2]:
+    #     cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
+    #     cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
+    #     cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
+    # FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
+    # nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
 
     m = CPFE2IGAModel(nonmatching_opt=nonmatching_opt)
     m.init_paramters()

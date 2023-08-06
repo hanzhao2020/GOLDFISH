@@ -31,7 +31,8 @@ class CPFFDAlignModel(Model):
             cpffd_list[i] = self.declare_variable(
                             self.op.input_cpffd_name_list[i],
                             shape=(self.op.input_shape),
-                            val=self.nonmatching_opt_ffd.cpffd_flat[:,field])
+                            val=self.nonmatching_opt_ffd.
+                                shopt_cpffd_flat[:,field])
         cpffd_align_list = csdl.custom(*cpffd_list, op=self.op)
         if not isinstance(cpffd_align_list, (list, tuple)):
             cpffd_align_list = [cpffd_align_list]
@@ -53,9 +54,13 @@ class CPFFDAlignOperation(CustomExplicitOperation):
         self.output_cpalign_name_pre = self.parameters['output_cpalign_name_pre']
 
         self.opt_field = self.nonmatching_opt_ffd.opt_field
-        self.input_shape = self.nonmatching_opt_ffd.cpffd_size
-        self.output_shape = self.nonmatching_opt_ffd.cp_align_size
-        self.deriv = self.nonmatching_opt_ffd.dcpaligndcpffd
+        # self.input_shape = self.nonmatching_opt_ffd.cpffd_size
+        # self.output_shape = self.nonmatching_opt_ffd.cp_align_size
+        # self.deriv = self.nonmatching_opt_ffd.dcpaligndcpffd
+
+        self.deriv = self.nonmatching_opt_ffd.shopt_dcpaligndcpffd
+        self.input_shape = self.deriv.shape[1]
+        self.output_shape = self.deriv.shape[0]
 
         self.input_cpffd_name_list = []
         self.output_cpalign_name_list = []
@@ -96,8 +101,8 @@ if __name__ == "__main__":
         cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
         cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
     FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
-    nonmatching_opt.set_align_CPFFD(align_dir=1)
+    nonmatching_opt.set_shopt_FFD(FFD_block.knots, FFD_block.control)
+    nonmatching_opt.set_shopt_align_CPFFD(shopt_align_dir=1)
 
     m = CPFFDAlignModel(nonmatching_opt_ffd=nonmatching_opt)
     m.init_paramters()
