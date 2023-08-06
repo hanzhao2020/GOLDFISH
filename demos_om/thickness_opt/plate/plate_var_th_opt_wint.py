@@ -211,7 +211,7 @@ optimizer = 'SNOPT'
 save_path = './'
 folder_name = "results/"
 p_ffd = 3
-ffd_block_num_el = [5,1,1]
+ffd_block_num_el = [2,1,1]
 
 geom_scale = 1.  # Convert current length unit to m
 E = Constant(68e9)  # Young's modulus, Pa
