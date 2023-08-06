@@ -100,17 +100,16 @@ class HthFE2IGAImOperation(object):
                     dres_array_out_list += [dres_sub_array_out]
                 d_residuals_array[:] += np.concatenate(dres_array_out_list)
             if d_inputs_array is not None:
-                for i, field in enumerate(self.opt_field):
-                    update_nest_vec(d_inputs_array, self.dh_th_fe_vec)
-                    dres_array_in_list = []
-                    for s_ind in range(self.num_splines):
-                        h_th_fe_sub = self.dh_th_fe_vec.getNestSubVecs()[s_ind]
-                        dres_sub_in = A_x(self.dRdh_th_fe_list[s_ind], 
-                                          h_th_fe_sub)
-                        dres_sub_array_in = get_petsc_vec_array(dres_sub_in, 
-                                            self.comm)
-                        dres_array_in_list += [dres_sub_array_in]
-                    d_residuals_array[:] += np.concatenate(dres_array_in_list)
+                update_nest_vec(d_inputs_array, self.dh_th_fe_vec)
+                dres_array_in_list = []
+                for s_ind in range(self.num_splines):
+                    h_th_fe_sub = self.dh_th_fe_vec.getNestSubVecs()[s_ind]
+                    dres_sub_in = A_x(self.dRdh_th_fe_list[s_ind], 
+                                        h_th_fe_sub)
+                    dres_sub_array_in = get_petsc_vec_array(dres_sub_in, 
+                                        self.comm)
+                    dres_array_in_list += [dres_sub_array_in]
+                d_residuals_array[:] += np.concatenate(dres_array_in_list)
         # # Numpy implementation
         # if d_residuals_array is not None:
         #     if d_outputs_array_list is not None:

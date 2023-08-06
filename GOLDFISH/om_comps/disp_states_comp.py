@@ -98,8 +98,8 @@ class DispStatesComp(om.ImplicitComponent):
 
         if self.save_files:
             self.func_eval_major_ind += [self.func_eval_ind-1]
-            # print("**** Saving pvd files, ind: {:6d} ****"
-            #       .format(self.major_iter_ind))
+            print("**** Saving pvd files, ind: {:6d} ****"
+                  .format(self.major_iter_ind))
             self.nonmatching_opt.save_files(
                 thickness=self.opt_thickness)
             self.major_iter_ind += 1

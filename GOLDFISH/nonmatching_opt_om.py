@@ -16,3 +16,4 @@ from GOLDFISH.om_comps.hth_map_comp import *
 from GOLDFISH.om_comps.hthffd2fe_comp import *
 from GOLDFISH.om_comps.hthfe2iga_comp import *
 from GOLDFISH.om_comps.hthffd_align_comp import *
+from GOLDFISH.om_comps.hthffd_regu_comp import *
