@@ -1,3 +1,7 @@
+"""
+The compressed arch geometry can be downloaded from:
+    https://drive.google.com/file/d/1U2-tGaPWtUX8WnYkXUW5VX_CSFMH_F8I/view?usp=sharing
+"""
 import numpy as np
 import openmdao.api as om
 from igakit.cad import *

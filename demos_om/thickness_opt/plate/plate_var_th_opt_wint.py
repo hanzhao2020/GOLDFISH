@@ -1,3 +1,7 @@
+"""
+The compressed plate geometry can be downloaded from:
+    https://drive.google.com/file/d/1nyE15ww0_JRAnVU-lWKQGgS62AHJsJq3/view?usp=sharing
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 import openmdao.api as om
@@ -222,7 +226,7 @@ h_th_val = Constant(1.0e-2)  # Thickness of surfaces, m
 penalty_coefficient = 1.0e3
 
 print("Importing geometry...")
-filename_igs = "./geometry/plate_geometry_cubic.igs"
+filename_igs = "./geometry/plate_geometry.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
 plate_surfaces = [topoface2surface(face, BSpline=True) 
                   for face in igs_shapes]

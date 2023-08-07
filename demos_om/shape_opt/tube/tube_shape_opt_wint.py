@@ -1,3 +1,7 @@
+"""
+The compressed T-beam geometry can be downloaded from:
+    https://drive.google.com/file/d/1FJLAzM33YIFseXUI6t8U4uu4P0stCNXi/view?usp=sharing
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 import openmdao.api as om
