@@ -1,12 +1,10 @@
 import math
 import numpy as np
 import os
-import glob
-import natsort
 from PENGoLINS.occ_preprocessing import *
 from PENGoLINS.nonmatching_shell import *
-from IGAOPT.utils.opt_utils import *
-from IGAOPT.utils.bsp_utils import *
+from GOLDFISH.utils.opt_utils import *
+from GOLDFISH.utils.bsp_utils import *
 from igakit.cad import *
 
 def scale_knots(knots, CP):
@@ -354,19 +352,21 @@ def update_FFD_block(FFD_block, new_cps, opt_field):
     new_FFD_block = NURBS(FFD_block.knots, new_cpffd)
     return new_FFD_block
 
-def create_pvd(filename, vtu_pre, directory='./'):
-    vtu_names = natsort.natsorted(glob.glob(directory+vtu_pre+'*.vtu'))
-    pvd_file = open(directory+filename, 'w')
-    pvd_file.write('<?xml version="1.0"?>\n')
-    pvd_file.write('<VTKFile type="Collection" version="0.1">\n')
-    pvd_file.write('  <Collection>\n')
-    for i in range(len(vtu_names)):
-        line = '    <DataSet timestep=\"'+str(i)+'\" part=\"0\" file=\"' \
-             + vtu_names[i].split('/')[-1] +'\" />\n'
-        pvd_file.write(line)
-    pvd_file.write('  </Collection>/n\n')
-    pvd_file.write('</VTKFile>\n')
-    pvd_file.close()
+# import glob
+# import natsort
+# def create_pvd(filename, vtu_pre, directory='./'):
+#     vtu_names = natsort.natsorted(glob.glob(directory+vtu_pre+'*.vtu'))
+#     pvd_file = open(directory+filename, 'w')
+#     pvd_file.write('<?xml version="1.0"?>\n')
+#     pvd_file.write('<VTKFile type="Collection" version="0.1">\n')
+#     pvd_file.write('  <Collection>\n')
+#     for i in range(len(vtu_names)):
+#         line = '    <DataSet timestep=\"'+str(i)+'\" part=\"0\" file=\"' \
+#              + vtu_names[i].split('/')[-1] +'\" />\n'
+#         pvd_file.write(line)
+#     pvd_file.write('  </Collection>/n\n')
+#     pvd_file.write('</VTKFile>\n')
+#     pvd_file.close()
 
 """ Example to create pvd file
 FFD_block_pre = 'FFD_block_'
