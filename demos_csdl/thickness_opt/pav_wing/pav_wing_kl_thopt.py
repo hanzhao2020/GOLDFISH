@@ -30,8 +30,8 @@ import sys
 from GOLDFISH.nonmatching_opt_ffd import *
 from PENGoLINS.igakit_utils import *
 from PENGoLINS.occ_preprocessing import*
-import kl_shell_module as klshell
-from kl_shell_pde import *
+import klshell_module as klshell
+from klshell_pde import *
 
 sys.setrecursionlimit(100000)
 
@@ -201,7 +201,7 @@ for i in range(num_surfs):
     if i in lin_spline_inds:
         lin_splines += [OCCBSpline2LoadSpline(
                         preprocessor.BSpline_surfs_refine[i], 
-                        splines[i], index=i)]
+                        splines[i], n_fields=1, index=i)]
 
 # Unstiffened Aluminum 2024 (T4)
 # reference: https://asm.matweb.com/search/SpecificMaterial.asp?bassnum=ma2024t4
@@ -244,6 +244,13 @@ for i in range(len(nodes_parametric)):
                            np.array([nodes_parametric[i][1]]))
 
 wing_thickness = pav_geom_mesh.functions['wing_thickness']
+
+test_ind = 10
+save_path = SAVE_PATH
+folder_name = 'results'+str(test_ind)+'/'
+
+nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
+                             thickness=nonmatching_opt.opt_thickness)
 
 # nodes_parametric_new = []
 # for node_para in nodes_parametric:
@@ -407,8 +414,7 @@ shell_displacements_model = klshell.KLShell(
 cruise_structural_wing_mesh_displacements, \
     cruise_structural_wing_mesh_stresses, wing_mass = \
     shell_displacements_model.evaluate(
-        forces=cruise_structural_wing_mesh_forces,
-        thicknesses=thickness_nodes)
+        forces=cruise_structural_wing_mesh_forces)
 cruise_model.register_output(cruise_structural_wing_mesh_stresses)
 cruise_model.register_output(cruise_structural_wing_mesh_displacements)
 cruise_model.register_output(wing_mass)
@@ -460,29 +466,27 @@ system_model_name = 'system_model.'+design_scenario_name+'.'\
 caddee_csdl_model.add_constraint(system_model_name+
     'Wing_klshell_displacement_map.wing_shell_tip_displacement',
     upper=0.1,scaler=1E1)
+
 caddee_csdl_model.add_constraint(system_model_name+
-    'Wing_klshell_model.klshell.aggregated_stress_model.max_vM_stress',
-    upper=324E6/1.5,scaler=1E-8)
+    'Wing_klshell_model.klshell.max_vM_model.max_vM_stress',
+    upper=324E6/1.5/20,scaler=1E-8)
+
 caddee_csdl_model.add_objective(system_model_name+
     'Wing_klshell_model.klshell.volume_model.volume', scaler=1e-1)
 
 h_min = h
 
-# for i in range(nonmatching_opt.num_splines):
-caddee_csdl_model.create_input(system_model_name+
-    'Wing_klshell_model.klshell.h_th_map_model.'+
-    shell_name+'_hth_design',
+caddee_csdl_model.create_input(shell_name+'_hth_design',
     shape=(nonmatching_opt.num_splines),
     val=np.ones(nonmatching_opt.num_splines)*h_min)
 
-caddee_csdl_model.add_design_variable(system_model_name+
-    'Wing_klshell_model.klshell.h_th_map_model.'+
-    shell_name+'_hth_design',
+caddee_csdl_model.add_design_variable(shell_name+'_hth_design',
     lower=0.005*in2m,
     upper=0.1*in2m,
     scaler=1e2)
-
-# caddee_csdl_model
+caddee_csdl_model.connect(shell_name+'_hth_design', 
+        system_model_name+\
+        'Wing_klshell_model.klshell.h_th_map_model.'+shell_name+'_hth_design')
 
 
 # h_min = h
@@ -535,6 +539,24 @@ if __name__ == '__main__':
     else:
         sim = Simulator(caddee_csdl_model, analytics=True)
 
+    print("Inspection opt 0: Memory usage: {:8.2f} MB.\n"\
+          .format(memory_usage_psutil()))
+
     sim.run()
 
+    print("Inspection opt 1: Memory usage: {:8.2f} MB.\n"\
+          .format(memory_usage_psutil()))
+
+
     prob = CSDLProblem(problem_name='pav', simulator=sim)
+
+    optimizer = SLSQP(prob, maxiter=50, ftol=1E-5)
+
+    # # from modopt.snopt_library import SNOPT
+    # optimizer = SNOPT(prob,
+    #                   Major_iterations = 100,
+    #                   Major_optimality = 1e-5,
+    #                   append2file=False)
+
+    # optimizer.solve()
+    # optimizer.print_results()

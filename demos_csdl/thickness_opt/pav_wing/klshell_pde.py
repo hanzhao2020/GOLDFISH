@@ -6,6 +6,8 @@
 # # RM shell related properties
 # from shell_analysis_fenicsx.read_properties import readCLT, sortIndex
 
+import psutil
+
 # GOLDFISH related models
 from GOLDFISH.nonmatching_opt_om import *
 from GOLDFISH.nonmatching_opt import NonMatchingOpt
@@ -22,6 +24,16 @@ import csdl
 import numpy as np
 
 SAVE_PATH = '/home/han/Documents/test_results/'
+
+def memory_usage_psutil():
+    # return the memory usage in MB
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info()[0]/float(1024**2)
+    return mem
+
+
+# print("Inspection: Memory usage: {:8.2f} MB.\n"\
+#           .format(memory_usage_psutil()))
 
 class KLShellModule(ModuleCSDL):
     def initialize(self):
@@ -78,16 +90,25 @@ class KLShellModule(ModuleCSDL):
                                        self.klshell_pde.lin_spline_inds.
                                        index(s_ind)]
                 self.spline_forces += [Function(lin_spline.V)]
-                self.source_terms += [lin_spline.rationalize(
+                self.source_terms += [Constant(1e-1)*lin_spline.rationalize(
                     self.spline_forces[s_ind])*sqrt(det(a)/det(A))
                     *inner(a2, self.nonmatching_opt.spline_test_funcs[s_ind])*
                     self.nonmatching_opt.splines[s_ind].dx]
+                # self.source_terms += [
+                #     *inner(self.spline_forces[s_ind], 
+                #     self.nonmatching_opt.spline_test_funcs[s_ind])*
+                #     self.nonmatching_opt.splines[s_ind].dx]
             else:
-                self.spline_forces += [Constant((0.))]
+                # self.spline_forces += [Constant((0.))]
+                # self.source_terms += [
+                #     self.spline_forces[s_ind]*sqrt(det(a)/det(A))
+                #     *inner(a2, self.nonmatching_opt.spline_test_funcs[s_ind])*
+                #     self.nonmatching_opt.splines[s_ind].dx]    
+                self.spline_forces += [Constant((0.,0.,0.))]        
                 self.source_terms += [
-                    self.spline_forces[s_ind]*sqrt(det(a)/det(A))
-                    *inner(a2, self.nonmatching_opt.spline_test_funcs[s_ind])*
-                    self.nonmatching_opt.splines[s_ind].dx]            
+                    inner(self.spline_forces[s_ind], 
+                    self.nonmatching_opt.spline_test_funcs[s_ind])*
+                    self.nonmatching_opt.splines[s_ind].dx]
             self.residuals += [SVK_residual(
                 self.nonmatching_opt.splines[s_ind], 
                 self.nonmatching_opt.spline_funcs[s_ind], 
@@ -122,12 +143,12 @@ class KLShellModule(ModuleCSDL):
         # self.disp_extraction_model.init_parameters()
         self.add(self.disp_extraction_model, self.disp_extraction_model_name)
 
-
         # Patch to CG1 thickness mapping model
         self.h_th_map_model = HthMapModel(
                               nonmatching_opt=self.nonmatching_opt,
                               input_h_th_name_design=self.h_th_name_design,
                               output_h_th_name_full=self.h_th_name_full)
+        print("Initializing model: ", self.h_th_map_model_name)
         self.h_th_map_model.init_parameters()
         # self.add(self.h_th_map_model_name, self.h_th_map_model)
         self.add(self.h_th_map_model, name=self.h_th_map_model_name)
@@ -138,7 +159,8 @@ class KLShellModule(ModuleCSDL):
                                  input_h_th_name=self.h_th_name_full,
                                  input_Paero_name=self.fsolid_name,
                                  output_u_name=self.disp_solid_name)
-        self.disp_states_model.init_parameters()
+        print("Initializing model: ", self.disp_states_model_name)
+        self.disp_states_model.init_parameters(save_files=True)
         self.add(self.disp_states_model, self.disp_states_model_name)
 
         # Volume model
@@ -146,8 +168,9 @@ class KLShellModule(ModuleCSDL):
                             nonmatching_opt=self.nonmatching_opt,
                             input_h_th_name=self.h_th_name_full,
                             output_vol_name=self.volume_name)
+        print("Initializing model: ", self.volume_model_name)
         self.volume_model.init_parameters()
-        self.add(self.volume_model, self.volume_model_name)
+        self.add(self.volume_model, name=self.volume_model_name)
 
         # Max vM stress model
         vm_surf = 'top'
@@ -160,11 +183,12 @@ class KLShellModule(ModuleCSDL):
                             input_u_name=self.disp_solid_name,
                             input_h_th_name=self.h_th_name_full,
                             output_max_vM_name=self.max_vM_name)
+        print("Initializing model: ", self.max_vM_model_name)
         self.max_vM_model.init_parameters()
         self.add(self.max_vM_model, self.max_vM_model_name)
 
-        self.connect(self.h_th_name_design,
-                     self.h_th_map_model_name+'.'+self.h_th_name_full)
+        # self.connect(self.h_th_name_design,
+        #              self.h_th_map_model_name+'.'+self.h_th_name_full)
         # self.connect(self.h_th_map_model_name+'.'+self.h_th_name_full,
         #              self.disp_states_model_name+'.'+self.h_th_name_full)
         # self.connect(self.force_reshaping_model_name+'.'+self.fsolid_name,
@@ -196,7 +220,7 @@ class ForceReshapingModel(csdl.Model):
         self.input_force_name = self.parameters['input_force_name']
         self.output_force_name = self.parameters['output_force_name']
 
-        phy_dim = 3
+        # phy_dim = 3
         # cg1_size_list = []
         # for s_ind in range(self.nonmatching_opt.num_splines):
         #     cg1_size_list += [self.nonmatching_opt.splines[s_ind]
@@ -207,13 +231,19 @@ class ForceReshapingModel(csdl.Model):
         force_shape = self.klshell_pde.solid_mesh_phys.shape
         force_size = force_shape[0]*force_shape[1]
 
+        # print("Test 1 ................")
+        # print("force_size:", force_size)
+        # print("force_shape:", force_shape)
+
         vector = np.arange(force_size)
         tensor = vector.reshape(force_shape)
         
         nodal_force_mat = self.declare_variable(self.input_force_name,
                            val=tensor)
+        # self.register_output(self.output_force_name,
+        #      csdl.reshape(nodal_force_mat, new_shape=(force_size,)))
         self.register_output(self.output_force_name,
-             csdl.reshape(nodal_force_mat, new_shape=(force_size,)))
+            csdl.pnorm(nodal_force_mat, 2, axis=1))
         
 
 class DisplacementExtractionModel(csdl.Model):
@@ -253,8 +283,13 @@ class DisplacementExtractionModel(csdl.Model):
         # for i, s_ind in enumerate(self.klshell_pde.lin_spline_inds):
         #     lin_disp_mat_list[i][s_ind] = csr_matrix(np.eye(cp_size_list[s_ind]))
 
+        print("Inspection disp extraction 0: Memory usage: {:8.2f} MB.\n"\
+              .format(memory_usage_psutil()))
 
         disp_ext_mat = self.klshell_pde.construct_nodal_disp_map()
+
+        print("Inspection disp extraction 1: Memory usage: {:8.2f} MB.\n"\
+              .format(memory_usage_psutil()))
 
 
         input_size = np.sum(self.klshell_pde.cp_size_list)
@@ -262,6 +297,12 @@ class DisplacementExtractionModel(csdl.Model):
         vector = np.arange(input_size)
         disp_vec = self.declare_variable(self.input_disp_name, val=vector)
         nodal_disp_vec = csdl.matvec(disp_ext_mat, disp_vec)
+
+        # print("Test 2 .......")
+        # print("mesh shape:", solid_mesh_shape)
+        # print("disp_ext_mat shape:", disp_ext_mat.shape)
+
+
         nodal_disp_mat = csdl.reshape(nodal_disp_vec,
                          new_shape=(solid_mesh_shape[1], solid_mesh_shape[0]))
         self.register_output(self.output_disp_name,
@@ -287,17 +328,35 @@ class KLShellPDE(object):
         self.lin_splines = lin_splines 
         self.surf_sol_obj = self.splines 
         # self.solid_mesh_phys, self.solid_mesh_par = \
+
+        print("Inspection klshell pde 0: Memory usage: {:8.2f} MB.\n"\
+                .format(memory_usage_psutil()))
+
         self.compute_solid_mesh_phys_coords()
         self.compute_basisfunc_support_size()
 
+        print("Inspection klshell pde 1: Memory usage: {:8.2f} MB.\n"\
+                .format(memory_usage_psutil()))
+
     def compute_basisfunc_support_size(self):
-        # vec = as_vector([Constant(1.0), Constant(0.0)])#, Constant(0.0)])
-        vec = Constant(1.)
-        self.bf_sup_sizes = \
-            [AT_x(spline.M, 
-                assemble(inner(spline.rationalize(TestFunction(spline.V)), vec)*spline.dx))\
-                .getArray()[:int(spline.M.size(1)/spline.nFields)] 
-                    for spline in self.lin_splines.surfaces]
+        # # vec = as_vector([Constant(1.0), Constant(0.0)])#, Constant(0.0)])
+        # vec = Constant((1.)*)
+        # self.bf_sup_sizes = \
+        #     [AT_x(spline.M, 
+        #         assemble(inner(spline.rationalize(TestFunction(spline.V)), vec)*spline.dx))\
+        #         .getArray()[:int(spline.M.size(1)/spline.nFields)] 
+        #             for spline in self.lin_splines.surfaces]
+        # self.bf_sup_sizes = np.concatenate(self.bf_sup_sizes)
+
+        self.bf_sup_sizes = []
+        for spline in self.lin_splines.surfaces:
+            # vec = Constant((1.,)*spline.nFields)
+            vec = Constant(1.)
+            sup_FE = assemble(inner(spline.rationalize(
+                     TestFunction(spline.V)), vec)*spline.dx)
+            # sup_FE_array = assemble(sup_FE).getArray()
+            self.bf_sup_sizes += [AT_x(spline.M, sup_FE).getArray()]
+                                  #[:int(spline.M.size(1)/spline.nFields)]]
         self.bf_sup_sizes = np.concatenate(self.bf_sup_sizes)
 
     def compute_solid_mesh_phys_coords(self):
@@ -323,8 +382,7 @@ class KLShellPDE(object):
 
         self.cp_size_list = []
         for s_ind in range(self.nonmatching_opt.num_splines):
-            self.cp_size_list += [self.nonmatching_opt.splines[s_ind]
-                             .M.size(1)]
+            self.cp_size_list += [self.nonmatching_opt.splines[s_ind].M.size(1)]
 
         lin_disp_mat_list = [[csr_matrix(np.zeros((self.cp_size_list[j], self.cp_size_list[i]))) 
                               for i in range(self.nonmatching_opt.num_splines)]
@@ -345,14 +403,15 @@ class KLShellPDE(object):
                      self.compute_IGA_bases_in_points(
                      surf_sol_obj_temp, 
                      self.solid_mesh_par, 
-                     num_spline_fields=self.phy_dim)).tocsr()
+                     num_spline_fields=3)).tocsr()
         self.Q_map.eliminate_zeros()
         # self.Q_map = self.Q_map[:, 
         #              :int(self.Q_map.shape[1]/self.phy_dim)]
         return self.Q_map
 
-    def compute_IGA_bases_in_points(self, surf_list, par_coords_list, 
+    def compute_IGA_bases_in_points(self, surf_list, par_coords_list,
                                     num_spline_fields=1):
+        # num_spline_fields = surf_list[0].nFields
         samples_FE = self.compute_FE_bases_in_points(
                      surf_list, par_coords_list, 
                      num_spline_fields=num_spline_fields)
@@ -363,8 +422,9 @@ class KLShellPDE(object):
             samples_IGA += [samples_FE[i]@M]
         return samples_IGA
 
-    def compute_FE_bases_in_points(self, surf_list, par_coords_list, 
+    def compute_FE_bases_in_points(self, surf_list, par_coords_list,
                                    num_spline_fields=1):
+        # num_spline_fields = surf_list[0].nFields
         sample_list = []
         for l in range(len(surf_list)):
             coord_vec = par_coords_list[l]
@@ -630,6 +690,7 @@ class NodalMap:
 
         # include influence of column scaling
         influence_coefficients = np.einsum('ij,j->ij', influence_coefficients, self.column_scaling_vec)
+        # influence_coefficients = np.dot(influence_coefficients, self.column_scaling_vec.reshape((-1,3))).reshape(-1,1)
 
         influence_coefficients[influence_coefficients < 1e-16] = 0.
         # TODO: Make influence_coefficients matrix sparse before summation below?

@@ -7,8 +7,9 @@ import numpy as np
 from scipy.sparse.linalg import spsolve
 from typing import Tuple, Dict
 
-from kl_shell_pde import (KLShellPDE, KLShellModule, 
-                          RadialBasisFunctions, NodalMap)
+from klshell_pde import (KLShellPDE, KLShellModule, 
+                          RadialBasisFunctions, NodalMap, 
+                          memory_usage_psutil)
 
 class LinearKLShellSurface(Module):
     def initialize(self, kwargs):
@@ -31,7 +32,7 @@ class LinearKLShellCSDL(ModuleCSDL):
                         klshell_pde=klshell_pde,
                         shells=shells)
         klshell_module.init_parameters()
-        self.add_module(klshell_module, name='kl_shell')
+        self.add_module(klshell_module, name='klshell')
 
 
 class KLShell(m3l.ExplicitOperation):
@@ -67,7 +68,7 @@ class KLShell(m3l.ExplicitOperation):
         shell_name = list(self.parameters['shells'].keys())[0]
 
         self.component = self.parameters['component']
-        self.name = f'{self.component.name}_kl_shell_model'
+        self.name = f'{self.component.name}_klshell_model'
 
         mesh_shape = self.klshell_pde.solid_mesh_phys.shape # TODO: figure out this data shape
 
@@ -85,10 +86,11 @@ class KLShell(m3l.ExplicitOperation):
                         shape=mesh_shape, operation=self)
         stresses = m3l.Variable(name=f'{shell_name}_stress',
                                 shape=mesh_shape[0], operation=self)
-        mass = m3l.Variable(name='mass', shape=(1,), operation=self)
-        inertia_tensor = m3l.Variable(name='inertia_tensor',
-                                      shape=(3,3), operation=self)
-        return displacements, stresses, mass
+        # mass = m3l.Variable(name='mass', shape=(1,), operation=self)
+        volume = m3l.Variable(name='volume', shape=(1,), operation=self)
+        # inertia_tensor = m3l.Variable(name='inertia_tensor',
+        #                               shape=(3,3), operation=self)
+        return displacements, stresses, volume
 
 
 class KLShellForces(m3l.ExplicitOperation):
@@ -121,11 +123,17 @@ class KLShellForces(m3l.ExplicitOperation):
         force_map = self.fmap(oml=self.nodal_forces_mesh.value.reshape((-1,3)))
 
         flattened_nodal_forces_shape = (np.prod(nodal_forces.shape[:-1]),
-                                        nodal_forces.shape[-1 ])
+                                        nodal_forces.shape[-1])
 
         nodal_forces_csdl = csdl_model.register_module_input(
                             name='nodal_forces',
                             shape=nodal_forces.shape)
+
+        # print("Test 3 ........")
+        # print("flattened_nodal_forces:", flattened_nodal_forces_shape)
+        # print("nodal_forces.shape:", nodal_forces.shape)
+
+
         flattened_nodal_forces = csdl.reshape(nodal_forces_csdl,
                                  new_shape=flattened_nodal_forces_shape)
 
@@ -137,6 +145,10 @@ class KLShellForces(m3l.ExplicitOperation):
                                       flattened_nodal_forces)
 
         output_shape = tuple(mesh_shape[:-1]) + (nodal_forces.shape[-1],)
+
+        # print("Test 4 ..........")
+        # print("force_map shape", force_map.shape)
+        # print("output shape: ", output_shape)
 
         shell_mesh_forces = csdl.reshape(flatenned_shell_mesh_forces, 
                                          new_shape=output_shape)
@@ -150,7 +162,7 @@ class KLShellForces(m3l.ExplicitOperation):
                  nodal_forces_mesh:am.MappedArray) -> m3l.Variable:
 
         self.component = self.parameters['component']
-        self.name = f'{self.component.name}_kl_shell_force_mapping'
+        self.name = f'{self.component.name}_klshell_force_mapping'
 
         self.nodal_forces_mesh = nodal_forces_mesh
         shell_name = list(self.parameters['shells'].keys())[0]
@@ -164,6 +176,10 @@ class KLShellForces(m3l.ExplicitOperation):
         return shell_forces
 
     def fmap(self, oml):
+
+        print("Inspection fmap 0: Memory usage: {:8.2f} MB.\n"\
+          .format(memory_usage_psutil()))
+
         self.G_mat = NodalMap(self.klshell_pde.solid_mesh_phys, 
                               oml, 
                               RBF_width_par=0.05, 
@@ -173,6 +189,9 @@ class KLShellForces(m3l.ExplicitOperation):
         rhs_mats = self.G_mat.map.T
         mat_f_sp = self.klshell_pde.compute_sparse_mass_matrix()
         weights = spsolve(mat_f_sp, rhs_mats)
+
+        print("Inspection fmap 1: Memory usage: {:8.2f} MB.\n"\
+          .format(memory_usage_psutil()))
         return weights
 
 
@@ -226,7 +245,7 @@ class KLShellNodalDisplacements(m3l.ExplicitOperation):
                  nodal_displacements_mesh:am.MappedArray) -> m3l.Variable:
         self.component = self.parameters['component']
         shell_name = list(self.parameters['shells'].keys())[0]   # this is only taking the first mesh added to the solver.
-        self.name = f'{self.component.name}_kl_shell_displacement_map'
+        self.name = f'{self.component.name}_klshell_displacement_map'
         self.arguments = {f'{shell_name}_displacement': shell_displacements}
         self.nodal_displacements_mesh = nodal_displacements_mesh
 
@@ -239,11 +258,17 @@ class KLShellNodalDisplacements(m3l.ExplicitOperation):
         return nodal_displacements, tip_displacement
 
     def umap(self, oml):
+
+        print("Inspection umap 0: Memory usage: {:8.2f} MB.\n"\
+                .format(memory_usage_psutil()))
         # Up = W*Us
         G_mat = NodalMap(self.klshell_pde.solid_mesh_phys, 
                          oml, RBF_width_par=10.0,
                          column_scaling_vec=self.klshell_pde.bf_sup_sizes)
         weights = G_mat.map
+
+        print("Inspection umap 1: Memory usage: {:8.2f} MB.\n"\
+                .format(memory_usage_psutil()))
         return weights
 
 
