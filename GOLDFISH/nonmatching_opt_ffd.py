@@ -11,7 +11,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
     Subclass of NonmatchingOpt which serves as the base class
     to setup optimization problem for non-matching structures.
     """
-    def __init__(self, splines, E, h_th, nu, num_field=3, 
+    def __init__(self, splines, E, h_th, nu, 
                  int_V_family='CG', int_V_degree=1,
                  int_dx_metadata=None, contact=None, 
                  opt_shape=True, opt_field=[0,1,2], 
@@ -38,7 +38,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
             The fields of the splines' control points to be optimized.
         comm : mpi4py.MPI.Intracomm, optional, default is None.
         """
-        super().__init__(splines, E, h_th, nu, num_field, 
+        super().__init__(splines, E, h_th, nu, 
                          int_V_family, int_V_degree, int_dx_metadata, 
                          contact, opt_shape, opt_field, opt_thickness, 
                          var_thickness, comm)

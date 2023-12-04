@@ -80,7 +80,7 @@ class NonMatchingOpt(NonMatchingCoupling):
     Subclass of NonmatchingCoupling which serves as the base class
     to setup optimization problem for non-matching structures.
     """
-    def __init__(self, splines, E, h_th, nu, num_field=3, 
+    def __init__(self, splines, E, h_th, nu, 
                  int_V_family='CG', int_V_degree=1,
                  int_dx_metadata=None, contact=None, 
                  opt_shape=True, opt_field=[0,1,2], 
@@ -107,7 +107,7 @@ class NonMatchingOpt(NonMatchingCoupling):
             The fields of the splines' control points to be optimized.
         comm : mpi4py.MPI.Intracomm, optional, default is None.
         """
-        super().__init__(splines, E, h_th, nu, num_field, 
+        super().__init__(splines, E, h_th, nu, 
                          int_V_family, int_V_degree,
                          int_dx_metadata, contact, comm)
         self.opt_field = opt_field
@@ -444,7 +444,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                 self.spline_funcs[self.mapping_list[index][side]].vector(), 
                 self.mortar_funcs[index][side][i].vector())
         for i in range(len(self.mortar_funcs[index][side])):
-            for j in range(self.num_field+1):
+            for j in range(self.nsd+1):
                 A_x_b(self.transfer_matrices_control_list[index][side][i], 
                     self.splines[self.mapping_list[index][side]]
                     .cpFuncs[j].vector(), 
@@ -882,8 +882,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.R_pen1M = derivative(PE, self.u1M)
         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-        self.R_pen0M_mat = Lambda_tilde(self.R_pen0M_vec, num_pts, self.num_field, self.para_dim, 0)
-        self.R_pen1M_mat = Lambda_tilde(self.R_pen1M_vec, num_pts, self.num_field, self.para_dim, 1)
+        self.R_pen0M_mat = Lambda_tilde(self.R_pen0M_vec, num_pts, self.nsd, self.para_dim, 0)
+        self.R_pen1M_mat = Lambda_tilde(self.R_pen1M_vec, num_pts, self.nsd, self.para_dim, 1)
 
         self.der_mat_FE_diag = self.A1.transposeMatMult(self.R_pen0M_mat.transpose())
         self.der_mat_FE_diag += self.A2.transposeMatMult(self.R_pen1M_mat.transpose())
@@ -902,8 +902,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.dR1Modu1M_mat = m2p(assemble(self.dR1Modu1M))
         self.A1u_vec = A_x(self.A1, self.uFE)
         self.A2u_vec = A_x(self.A2, self.uFE)
-        self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.num_field, self.para_dim, order=1)
-        self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.num_field, self.para_dim, order=2)
+        self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.para_dim, order=1)
+        self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.para_dim, order=2)
 
         temp_mat = self.A0o.transposeMatMult(self.dR0Modu0M_mat) + \
                    self.A1o.transposeMatMult(self.dR1Modu0M_mat)
@@ -924,8 +924,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.dR1Mdu1M_mat = m2p(assemble(self.dR1Mdu1M))
         # self.A1u_vec = A_x(self.A1, self.uFE)
         # self.A2u_vec = A_x(self.A2, self.uFE)
-        # self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.num_field, self.para_dim, order=1)
-        # self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.num_field, self.para_dim, order=2)
+        # self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.para_dim, order=1)
+        # self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.para_dim, order=2)
 
         temp_mat = self.A0.transposeMatMult(self.dR0Mdu0M_mat) + \
                    self.A1.transposeMatMult(self.dR1Mdu0M_mat)

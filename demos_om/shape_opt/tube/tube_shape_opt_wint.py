@@ -366,21 +366,21 @@ elif optimizer.upper() == 'SLSQP':
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-# Create a recorder variable
-recorder_name = './opt_data/recorder.sql'
-FFD_data_name = './opt_data/FFD_data.npz'
+# # Create a recorder variable
+# recorder_name = './opt_data/recorder.sql'
+# FFD_data_name = './opt_data/FFD_data.npz'
 
-prob.driver.recording_options['includes'] = ['*']
-prob.driver.recording_options['record_objectives'] = True
-prob.driver.recording_options['record_derivatives'] = True
-prob.driver.recording_options['record_constraints'] = True
-prob.driver.recording_options['record_desvars'] = True
-prob.driver.recording_options['record_inputs'] = True
-prob.driver.recording_options['record_outputs'] = True
-prob.driver.recording_options['record_residuals'] = True
+# prob.driver.recording_options['includes'] = ['*']
+# prob.driver.recording_options['record_objectives'] = True
+# prob.driver.recording_options['record_derivatives'] = True
+# prob.driver.recording_options['record_constraints'] = True
+# prob.driver.recording_options['record_desvars'] = True
+# prob.driver.recording_options['record_inputs'] = True
+# prob.driver.recording_options['record_outputs'] = True
+# prob.driver.recording_options['record_residuals'] = True
 
-recorder = om.SqliteRecorder(recorder_name)
-prob.driver.add_recorder(recorder)
+# recorder = om.SqliteRecorder(recorder_name)
+# prob.driver.add_recorder(recorder)
 
 prob.setup()
 # prob.set_solver_print(0)
