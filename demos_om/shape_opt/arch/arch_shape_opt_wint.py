@@ -369,21 +369,21 @@ elif optimizer.upper() == 'SLSQP':
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-# Create a recorder variable
-recorder_name = './recorder.sql'
-FFD_data_name = './FFD_data.npz'
+# # Create a recorder variable
+# recorder_name = './recorder.sql'
+# FFD_data_name = './FFD_data.npz'
 
-prob.driver.recording_options['includes'] = ['*']
-prob.driver.recording_options['record_objectives'] = True
-prob.driver.recording_options['record_derivatives'] = True
-prob.driver.recording_options['record_constraints'] = True
-prob.driver.recording_options['record_desvars'] = True
-prob.driver.recording_options['record_inputs'] = True
-prob.driver.recording_options['record_outputs'] = True
-prob.driver.recording_options['record_residuals'] = True
+# prob.driver.recording_options['includes'] = ['*']
+# prob.driver.recording_options['record_objectives'] = True
+# prob.driver.recording_options['record_derivatives'] = True
+# prob.driver.recording_options['record_constraints'] = True
+# prob.driver.recording_options['record_desvars'] = True
+# prob.driver.recording_options['record_inputs'] = True
+# prob.driver.recording_options['record_outputs'] = True
+# prob.driver.recording_options['record_residuals'] = True
 
-recorder = om.SqliteRecorder(recorder_name)
-prob.driver.add_recorder(recorder)
+# recorder = om.SqliteRecorder(recorder_name)
+# prob.driver.add_recorder(recorder)
 
 prob.setup()
 # prob.set_solver_print(0)
@@ -398,9 +398,9 @@ if mpirank == 0:
           format(np.max(max_F2)))
 
 
-major_iter_inds = model.disp_states_comp.func_eval_major_ind
-np.savez(FFD_data_name, opt_field=opt_field,
-                        major_iter_ind=major_iter_inds,
-                        ffd_control=FFD_block.control,
-                        ffd_knots=FFD_block.knots,
-                        QoI=np.max(max_F2))
+# major_iter_inds = model.disp_states_comp.func_eval_major_ind
+# np.savez(FFD_data_name, opt_field=opt_field,
+#                         major_iter_ind=major_iter_inds,
+#                         ffd_control=FFD_block.control,
+#                         ffd_knots=FFD_block.knots,
+#                         QoI=np.max(max_F2))

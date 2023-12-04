@@ -394,9 +394,9 @@ if mpirank == 0:
     print("Maximum F0: {:8.6f}".format(max_F0))
     print("Maximum F1: {:8.6f}".format(max_F1))
 
-major_iter_inds = model.disp_states_comp.func_eval_major_ind
-np.savez(FFD_data_name, opt_field=opt_field,
-                        major_iter_ind=major_iter_inds,
-                        ffd_control=FFD_block.control,
-                        ffd_knots=FFD_block.knots,
-                        QoI=np.array([max_F0, max_F1]))
+# major_iter_inds = model.disp_states_comp.func_eval_major_ind
+# np.savez(FFD_data_name, opt_field=opt_field,
+#                         major_iter_ind=major_iter_inds,
+#                         ffd_control=FFD_block.control,
+#                         ffd_knots=FFD_block.knots,
+#                         QoI=np.array([max_F0, max_F1]))
