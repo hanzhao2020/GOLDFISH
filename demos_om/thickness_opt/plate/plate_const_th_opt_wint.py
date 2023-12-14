@@ -27,7 +27,7 @@ class ThicknessOptGroup(om.Group):
         self.volume_name = self.options['volume_name']
         self.int_energy_name = self.options['int_energy_name']
 
-        self.design_var_lower = 2e-3
+        self.design_var_lower = 4e-3
         self.design_var_upper = 5e-2
 
         self.num_splines = self.nonmatching_opt.num_splines
@@ -152,8 +152,8 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-# optimizer = 'SLSQP'
-optimizer = 'SNOPT'
+optimizer = 'SLSQP'
+# optimizer = 'SNOPT'
 
 save_path = './'
 folder_name = "results/"

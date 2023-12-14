@@ -209,8 +209,8 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-# optimizer = 'SLSQP'
-optimizer = 'SNOPT'
+optimizer = 'SLSQP'
+# optimizer = 'SNOPT'
 
 save_path = './'
 folder_name = "results/"
