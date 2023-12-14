@@ -328,8 +328,11 @@ for surf_ind in range(start_ind, end_ind, ind_step):
             calculator3Display.SetRepresentationType('Surface With Edges')
 
     if show_thickness:
-        if surf_ind in transform_ind1 or surf_ind in transform_ind2:
-            cal_input = transform1
+        if show_transform:
+            if surf_ind in transform_ind1 or surf_ind in transform_ind2:
+                cal_input = transform1
+            else:
+                cal_input = warpByVector2
         else:
             cal_input = warpByVector2
         # create a new 'Calculator'
