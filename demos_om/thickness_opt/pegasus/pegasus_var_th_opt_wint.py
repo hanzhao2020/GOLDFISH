@@ -268,6 +268,35 @@ nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, opt_shape=False,
                                  opt_thickness=True, var_thickness=True, 
                                  comm=worldcomm)
 
+nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
+
+if mpirank == 0:
+    print("Setting up mortar meshes...")
+
+nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
+                                    preprocessor.intersections_para_coords, 
+                                    penalty_coefficient)
+
+
+# Define magnitude of load
+load = Constant(1) # The load should be in the unit of N/m^2
+f1 = as_vector([Constant(0.0), Constant(0.0), load])
+
+# Distributed downward load
+loads = [f1]*num_surfs
+source_terms = []
+residuals = []
+for i in range(num_surfs):
+    z = nonmatching_opt.splines[i].rationalize(
+        nonmatching_opt.spline_test_funcs[i])
+    source_terms += [inner(loads[i], z)\
+                     *nonmatching_opt.splines[i].dx]
+    residuals += [SVK_residual(nonmatching_opt.splines[i], 
+                  nonmatching_opt.spline_funcs[i], 
+                  nonmatching_opt.spline_test_funcs[i], E, nu, h_th[i], 
+                  source_terms[i])]
+nonmatching_opt.set_residuals(residuals)
+
 ###############################################################
 print("Creating FFD blocks ...")
 outer_skin_end_ind = num_secs*4
