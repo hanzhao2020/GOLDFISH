@@ -13,6 +13,7 @@ class DispImOpeartion(object):
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_thickness = self.nonmatching_opt.opt_thickness
         self.var_thickness = self.nonmatching_opt.var_thickness
+        self.use_aero_pressure = self.nonmatching_opt.use_aero_pressure
         
         self.dres_iga = self.nonmatching_opt.vec_iga_nest.copy()
         self.du_iga = self.nonmatching_opt.vec_iga_nest.copy()
@@ -25,6 +26,9 @@ class DispImOpeartion(object):
                 self.dh_th = self.nonmatching_opt.vec_scalar_iga_nest.copy()
             else:
                 self.dh_th = self.nonmatching_opt.h_th_nest.copy()
+
+        if self.use_aero_pressure:
+            self.dPaero = self.nonmatching_opt.linear_spline_vec_iga_nest.copy()
 
     def apply_nonlinear(self):
         res_iga = self.nonmatching_opt.RIGA()
@@ -48,6 +52,8 @@ class DispImOpeartion(object):
                                           dRIGAdCPIGA(field),]
         if self.opt_thickness:
             self.dRigadh_th = self.nonmatching_opt.dRIGAdh_th()
+        if self.use_aero_pressure:
+            self.dRigadPaero = self.nonmatching_opt.dRIGAdPaero()
 
     def apply_linear_fwd(self, d_inputs_array_list=None, 
                          d_outputs_array=None, d_residuals_array=None):
@@ -75,8 +81,16 @@ class DispImOpeartion(object):
                 if self.opt_thickness:
                     # Assume thickness vector is always on the last
                     # index of ``d_inputs_array_list``
-                    update_nest_vec(d_inputs_array_list[-1], self.dh_th)
+                    update_nest_vec(d_inputs_array_list[len(self.opt_field)], 
+                                    self.dh_th)
                     A_x_b(self.dRigadh_th, self.dh_th, self.dres_iga)
+                    dres_iga_array = get_petsc_vec_array(self.dres_iga,
+                                                         self.comm)
+                    d_residuals_array[:] += dres_iga_array
+                if self.use_aero_pressure:
+                    update_nest_vec(d_inputs_array_list[len(self.opt_field)+1],
+                                    self.dPaero)
+                    A_x_b(self.dRigadPaero, self.dPaero, self.dres_iga)
                     dres_iga_array = get_petsc_vec_array(self.dres_iga,
                                                          self.comm)
                     d_residuals_array[:] += dres_iga_array
@@ -106,7 +120,11 @@ class DispImOpeartion(object):
                 if self.opt_thickness:
                     AT_x_b(self.dRigadh_th, self.dres_iga, self.dh_th)
                     dh_th_array = get_petsc_vec_array(self.dh_th, self.comm)
-                    d_inputs_array_list[-1][:] += dh_th_array
+                    d_inputs_array_list[len(self.opt_field)][:] += dh_th_array
+                if self.use_aero_pressure:
+                    AT_x_b(self.dRigadPaero, self.dres_iga, self.dPaero)
+                    dPaero_array = get_petsc_vec_array(self.dPaero, self.comm)
+                    d_inputs_array_list[len(self.opt_field)+1][:] += dPaero_array
         return d_inputs_array_list, d_outputs_array
 
     def solve_linear_fwd(self, d_outputs_array, d_residuals_array):

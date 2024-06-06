@@ -4,6 +4,11 @@ class MaxvMStressExOperation(object):
 
     def __init__(self, nonmatching_opt, rho=1., alpha=None, m=None, 
                  surf="top", method="pnorm", linearize_stress=False):
+        """
+        Parameters
+        ----------
+        method : str, {'pnorm', 'KS', 'induced power'}
+        """
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
@@ -53,17 +58,34 @@ class MaxvMStressExOperation(object):
         self.max_vM_symexps = []
         self.max_vM_forms = []
         for s_ind in range(self.num_splines):
-            self.max_vM_symexps += [self.max_vM_symexp(
-                                   self.vMstress[s_ind], s_ind)]
-            self.max_vM_forms += [Form(self.max_vM_symexps[s_ind])]
+            if self.method == 'induced power':
+                self.max_vM_symexps += [self.max_vM_symexp(
+                                    self.vMstress[s_ind], s_ind)]
+                self.max_vM_forms += [[Form(self.max_vM_symexps[s_ind][0]),
+                                       Form(self.max_vM_symexps[s_ind][1])],]
+            else:
+                self.max_vM_symexps += [self.max_vM_symexp(
+                                    self.vMstress[s_ind], s_ind)]
+                self.max_vM_forms += [Form(self.max_vM_symexps[s_ind])]
 
         # Derivatives w.r.t. displacements
         self.dmax_vMdu_symexp = []
         self.dmax_vMdu_forms = []
         for s_ind in range(self.num_splines):
-            self.dmax_vMdu_symexp += [derivative(self.max_vM_symexps[s_ind],
-                                self.nonmatching_opt.spline_funcs[s_ind])]
-            self.dmax_vMdu_forms += [Form(self.dmax_vMdu_symexp[s_ind])]
+            if self.method == 'induced power':
+                self.dmax_vMdu_symexp += [
+                    [derivative(self.max_vM_symexps[s_ind][0],
+                               self.nonmatching_opt.spline_funcs[s_ind]),
+                     derivative(self.max_vM_symexps[s_ind][1],
+                               self.nonmatching_opt.spline_funcs[s_ind])],]
+                self.dmax_vMdu_forms += [
+                    [Form(self.dmax_vMdu_symexp[s_ind][0]),
+                     Form(self.dmax_vMdu_symexp[s_ind][1])],]
+            else:
+                self.dmax_vMdu_symexp += [derivative(self.max_vM_symexps[s_ind],
+                                    self.nonmatching_opt.spline_funcs[s_ind])]
+                self.dmax_vMdu_forms += [Form(self.dmax_vMdu_symexp[s_ind])]
+
 
         # Derivatives w.r.t. control points
         if self.opt_shape:
@@ -71,11 +93,21 @@ class MaxvMStressExOperation(object):
             self.dmax_vMdcp_forms = [[] for i in range(len(self.opt_field))]
             for i, field in enumerate(self.opt_field):
                 for s_ind in range(self.num_splines):
-                    self.dmax_vMdcp_symexp[i] += [derivative(
-                                    self.max_vM_symexps[s_ind], 
-                                    self.splines[s_ind].cpFuncs[field])]
-                    self.dmax_vMdcp_forms[i] += [Form(
-                                    self.dmax_vMdcp_symexp[i][s_ind])]
+                    if self.method == 'induced power':
+                        self.dmax_vMdcp_symexp[i] += [
+                            [derivative(self.max_vM_symexps[s_ind][0], 
+                                       self.splines[s_ind].cpFuncs[field]), 
+                             derivative(self.max_vM_symexps[s_ind][1], 
+                                       self.splines[s_ind].cpFuncs[field])],]
+                        self.dmax_vMdcp_forms[i] += [
+                                [Form(self.dmax_vMdcp_symexp[i][s_ind][0]),
+                                 Form(self.dmax_vMdcp_symexp[i][s_ind][1])],]
+                    else:
+                        self.dmax_vMdcp_symexp[i] += [derivative(
+                                        self.max_vM_symexps[s_ind], 
+                                        self.splines[s_ind].cpFuncs[field])]
+                        self.dmax_vMdcp_forms[i] += [Form(
+                                        self.dmax_vMdcp_symexp[i][s_ind])]
 
         # Derivatives w.r.t. thickness (vM stress on middle surface is 
         # independent of thickness)
@@ -83,11 +115,21 @@ class MaxvMStressExOperation(object):
             self.dmax_vMdh_th_symexp = []
             self.dmax_vMdh_th_forms = []
             for s_ind in range(self.num_splines):
-                self.dmax_vMdh_th_symexp += [derivative(
-                            self.max_vM_symexps[s_ind],
-                            self.nonmatching_opt.h_th[s_ind])]
-                self.dmax_vMdh_th_forms += [Form(
-                            self.dmax_vMdh_th_symexp[s_ind])]
+                if self.method == 'induced power':
+                    self.dmax_vMdh_th_symexp += [
+                        [derivative(self.max_vM_symexps[s_ind][0],
+                                    self.nonmatching_opt.h_th[s_ind]),
+                         derivative(self.max_vM_symexps[s_ind][1],
+                                    self.nonmatching_opt.h_th[s_ind])],]
+                    self.dmax_vMdh_th_forms += [
+                        [Form(self.dmax_vMdh_th_symexp[s_ind][0]),
+                         Form(self.dmax_vMdh_th_symexp[s_ind][1])],]
+                else:
+                    self.dmax_vMdh_th_symexp += [derivative(
+                                self.max_vM_symexps[s_ind],
+                                self.nonmatching_opt.h_th[s_ind])]
+                    self.dmax_vMdh_th_forms += [Form(
+                                self.dmax_vMdh_th_symexp[s_ind])]
 
     def compute_alpha(self):
         cell_vol_list = []
@@ -128,11 +170,17 @@ class MaxvMStressExOperation(object):
     def pnorm_symexp(self, stress, ind):
         return ((stress/self.m_list[ind])**self.rho)*self.splines[ind].dx
 
+    def induced_power(self, stress, ind):
+        return (((stress/self.m_list[ind])**(self.rho+1))*self.splines[ind].dx, 
+                ((stress/self.m_list[ind])**(self.rho))*self.splines[ind].dx)
+
     def max_vM_symexp(self, stress, ind):
         if self.method == 'KS':
             max_vM_symexp = self.KS_symexp(stress, ind)
         elif self.method == 'pnorm':
             max_vM_symexp = self.pnorm_symexp(stress, ind)
+        elif self.method == 'induced power':
+            max_vM_symexp = self.induced_power(stress, ind)
         else:
             raise ValueError("Unsupported max stress method "+self.method)
         return max_vM_symexp
@@ -140,24 +188,40 @@ class MaxvMStressExOperation(object):
     def continuous_KS_function(self, KS_form, ind):
         KS_val = assemble(KS_form)
         if KS_val == 0:
-            KS_val = 1e-9
+            KS_val = 1e-15
         elif KS_val == inf:
-            KS_val = 1e14
+            KS_val = 1e15
         return self.m_list[ind] + 1/self.rho*np.log(1/self.alpha*KS_val)
 
     def continuous_pnorm_function(self, pnorm_form, ind):
         pnorm_val = assemble(pnorm_form)
         if pnorm_val == 0:
-            pnorm_val = 1e-12
+            pnorm_val = 1e-15
         elif pnorm_val == inf:
-            pnorm_val = inf
+            pnorm_val = 1e15
         return self.m_list[ind]*(1/self.alpha*pnorm_val)**(1/self.rho)
 
-    def continuous_max_vM_stress(self, max_vM_from, ind):
+    def continuous_induced_power_function(self, ip_form, ind):
+        ip_val_num = assemble(ip_form[0])
+        ip_val_den = assemble(ip_form[1])
+        if ip_val_num == 0:
+            ip_val_num = 1e-15
+        elif ip_val_num == inf:
+            ip_val_num = 1e15
+        if ip_val_den == 0:
+            ip_val_den = 1e-15
+        elif ip_val_den == inf:
+            ip_val_den = 1e15
+        return self.m_list[ind]*ip_val_num/ip_val_den
+
+    def continuous_max_vM_stress(self, max_vM_form, ind):
         if self.method == 'KS':
-            max_vM_stress = self.continuous_KS_function(max_vM_from, ind)
+            max_vM_stress = self.continuous_KS_function(max_vM_form, ind)
         elif self.method == 'pnorm':
-            max_vM_stress = self.continuous_pnorm_function(max_vM_from, ind)
+            max_vM_stress = self.continuous_pnorm_function(max_vM_form, ind)
+        elif self.method == 'induced power':
+            max_vM_stress = self.continuous_induced_power_function(
+                            max_vM_form, ind)
         else:
             raise ValueError("Unsupported max stress method "+self.method)
         return max_vM_stress
@@ -176,11 +240,19 @@ class MaxvMStressExOperation(object):
         max_dp = self.m*(1/self.alpha*max_dp)**(1/self.rho)
         return max_dp
 
+    def discrete_induced_power_function(self, stress_list):
+        max_dp = 0
+        max_dp = self.m*(np.sum((np.array(stress_list)/self.m)**(self.rho+1)))\
+                 /(np.sum((np.array(stress_list)/self.m)**(self.rho)))
+        return max_dp
+
     def discrete_max_vM_stress(self, stress_list):
         if self.method == 'KS':
             max_vM_stress = self.discrete_KS_function(stress_list)
         elif self.method == 'pnorm':
             max_vM_stress = self.discrete_pnorm_function(stress_list)
+        elif self.method == 'induced power':
+            max_vM_stress = self.discrete_induced_power_function(stress_list)
         else:
             raise ValueError("Unsupported max stress method "+self.method)
         return max_vM_stress
@@ -209,10 +281,10 @@ class MaxvMStressExOperation(object):
 
     def dlocal_KSdKS_form(self, max_vM_forms, ind):
         KS_val = assemble(max_vM_forms[ind])
-        if KS_val == 0:
-            KS_val = 1e-9
-        elif KS_val == inf:
-            KS_val = 1e14
+        # if KS_val == 0:
+        #     KS_val = 1e-9
+        # elif KS_val == inf:
+        #     KS_val = 1e15
         return 1./(self.rho*KS_val)
 
     def dglobal_pnormdlocal_prnom(self, stress_list, ind):
@@ -225,13 +297,38 @@ class MaxvMStressExOperation(object):
 
     def dlocal_pnormdpnorm_form(self, max_vM_forms, ind):
         pnorm_val = assemble(max_vM_forms[ind])
-        if pnorm_val == 0:
-            pnorm_val = 1e-12
-        elif pnorm_val == inf:
-            pnorm_val = inf
+        # if pnorm_val == 0:
+        #     pnorm_val = 1e-12
+        # elif pnorm_val == inf:
+        #     pnorm_val = 1e15
         temp_val0 = self.m_list[ind]*(1/self.alpha)**(1/self.rho)\
                   *(1/self.rho)*pnorm_val**(1/self.rho-1)
         return temp_val0
+
+    def dglobal_induced_powerdlocal_induced_power(self, stress_list, ind):
+        vm_max_num = (np.sum((np.array(stress_list)/self.m)**(self.rho+1)))
+        vm_max_den = (np.sum((np.array(stress_list)/self.m)**(self.rho)))
+        dvm_max_num = 1/self.m*(self.rho+1)*(stress_list[ind]/self.m)**self.rho
+        dvm_max_den = 1/self.m*self.rho*(stress_list[ind]/self.m)**(self.rho-1)
+        deriv_val = self.m*(dvm_max_num*vm_max_den - 
+                     vm_max_num*dvm_max_den)/(vm_max_den**2)
+        return deriv_val
+
+    def dlocal_induced_powerdinduced_power_form(self, max_vM_stress, ind):
+        pass
+
+    '''
+    dximax_dxi = np.zeros(self.xi_size)
+    xi_max_num = (np.sum((xi)**(self.rho+1)))
+    xi_max_den = (np.sum((xi)**(self.rho)))
+    for i in range(self.xi_size):
+        dxi_max_num = (self.rho+1)*xi[i]**self.rho
+        dxi_max_den = self.rho*xi[i]**(self.rho-1)
+        dximax_dxi[i] = (dxi_max_num*xi_max_den - 
+                            xi_max_num*dxi_max_den)/(xi_max_den**2)
+    '''
+
+
 
     def dmax_vMduIGA_global(self, array=True, apply_bcs=True):
         max_vM_sub = []
@@ -244,10 +341,20 @@ class MaxvMStressExOperation(object):
             if self.method == 'KS':
                 a0 = self.dglobal_KSdlocal_KS(max_vM_sub, s_ind)
                 a1 = self.dlocal_KSdKS_form(self.max_vM_forms, s_ind)
+                dfdu = assemble(self.dmax_vMdu_forms[s_ind])
             elif self.method == 'pnorm':
                 a0 = self.dglobal_pnormdlocal_prnom(max_vM_sub, s_ind)
                 a1 = self.dlocal_pnormdpnorm_form(self.max_vM_forms, s_ind)
-            dfdu = assemble(self.dmax_vMdu_forms[s_ind])
+                dfdu = assemble(self.dmax_vMdu_forms[s_ind])
+            elif self.method == 'induced power':
+                a0 = self.dglobal_induced_powerdlocal_induced_power(
+                     max_vM_sub, s_ind)
+                a1 = self.m_list[s_ind]
+                dfdu = (assemble(self.dmax_vMdu_forms[s_ind][0])\
+                       *assemble(self.max_vM_forms[s_ind][1]) - \
+                        assemble(self.dmax_vMdu_forms[s_ind][1])\
+                       *assemble(self.max_vM_forms[s_ind][0]))\
+                       /(assemble(self.max_vM_forms[s_ind][1]))**2
             sub_deriv = v2p(a0*a1*dfdu)
             dglobal_max_vMdu_list += [sub_deriv]
 
@@ -272,10 +379,20 @@ class MaxvMStressExOperation(object):
             if self.method == 'KS':
                 a0 = self.dglobal_KSdlocal_KS(max_vM_sub, s_ind)
                 a1 = self.dlocal_KSdKS_form(self.max_vM_forms, s_ind)
+                dfdcp_fe = assemble(self.dmax_vMdcp_forms[field_ind][s_ind])
             elif self.method == 'pnorm':
                 a0 = self.dglobal_pnormdlocal_prnom(max_vM_sub, s_ind)
                 a1 = self.dlocal_pnormdpnorm_form(self.max_vM_forms, s_ind)
-            dfdcp_fe = assemble(self.dmax_vMdcp_forms[field_ind][s_ind])
+                dfdcp_fe = assemble(self.dmax_vMdcp_forms[field_ind][s_ind])
+            elif self.method == 'induced power':
+                a0 = self.dglobal_induced_powerdlocal_induced_power(
+                     max_vM_sub, s_ind)
+                a1 = self.m_list[s_ind]
+                dfdcp_fe = (assemble(self.dmax_vMdcp_forms[field_ind][s_ind][0])\
+                            *assemble(self.max_vM_forms[s_ind][1]) - \
+                            assemble(self.dmax_vMdcp_forms[field_ind][s_ind][1])\
+                            *assemble(self.max_vM_forms[s_ind][0]))\
+                            /(assemble(self.max_vM_forms[s_ind][1]))**2
             sub_deriv = v2p(a0*a1*dfdcp_fe)
             dglobal_max_vMdcp_fe_list += [sub_deriv]
 
@@ -299,10 +416,20 @@ class MaxvMStressExOperation(object):
             if self.method == 'KS':
                 a0 = self.dglobal_KSdlocal_KS(max_vM_sub, s_ind)
                 a1 = self.dlocal_KSdKS_form(self.max_vM_forms, s_ind)
+                dfdh_th = assemble(self.dmax_vMdh_th_forms[s_ind])
             elif self.method == 'pnorm':
                 a0 = self.dglobal_pnormdlocal_prnom(max_vM_sub, s_ind)
                 a1 = self.dlocal_pnormdpnorm_form(self.max_vM_forms, s_ind)
-            dfdh_th = assemble(self.dmax_vMdh_th_forms[s_ind])
+                dfdh_th = assemble(self.dmax_vMdh_th_forms[s_ind])
+            elif self.method == 'induced power':
+                a0 = self.dglobal_induced_powerdlocal_induced_power(
+                     max_vM_sub, s_ind)
+                a1 = self.m_list[s_ind]
+                dfdh_th = (assemble(self.dmax_vMdh_th_forms[s_ind][0])\
+                           *assemble(self.max_vM_forms[s_ind][1]) - \
+                           assemble(self.dmax_vMdh_th_forms[s_ind][1])\
+                           *assemble(self.max_vM_forms[s_ind][0]))\
+                           /(assemble(self.max_vM_forms[s_ind][1]))**2
             sub_deriv = v2p(a0*a1*dfdh_th)
             dglobal_max_vMdh_th_list += [sub_deriv]
 

@@ -32,9 +32,17 @@ class ComplianceExOperation(object):
             self.dcpldu_forms += [dcpldu]
 
         if self.opt_shape:
+            # self.dcpldcp_forms = [[] for i in range(len(self.opt_field))]
+            # for i, field in enumerate(self.opt_field):
+            #     for s_ind in range(self.num_splines):
+            #         dcpldcp = derivative(self.c_forms[s_ind],
+            #                    self.splines[s_ind].cpFuncs[field])
+            #         self.dcpldcp_forms[i] += [dcpldcp]
+            self.opt_field = self.nonmatching_opt.opt_field
+            self.shopt_surf_inds = self.nonmatching_opt.shopt_surf_inds
             self.dcpldcp_forms = [[] for i in range(len(self.opt_field))]
             for i, field in enumerate(self.opt_field):
-                for s_ind in range(self.num_splines):
+                for j, s_ind in enumerate(self.shopt_surf_inds[i]):
                     dcpldcp = derivative(self.c_forms[s_ind],
                                self.splines[s_ind].cpFuncs[field])
                     self.dcpldcp_forms[i] += [dcpldcp]
@@ -60,14 +68,30 @@ class ComplianceExOperation(object):
             return dcpldu_iga_nest
 
     def dcpldCPIGA(self, field, array=True):
+        # dcpldcp_fe_list = []
+        # field_ind = self.opt_field.index(field)
+        # for s_ind in range(self.num_splines):
+        #     dcpldcp_fe_assemble = assemble(
+        #                            self.dcpldcp_forms[field_ind][s_ind])
+        #     dcpldcp_fe_list += [v2p(dcpldcp_fe_assemble)]
+        # dcpldcp_iga_nest = self.nonmatching_opt.extract_nonmatching_vec(
+        #                    dcpldcp_fe_list, scalar=True)
+        # if array:
+        #     return get_petsc_vec_array(dcpldcp_iga_nest,
+        #                                comm=self.nonmatching_opt.comm)
+        # else:
+        #     return dcpldcp_iga_nest
+
         dcpldcp_fe_list = []
         field_ind = self.opt_field.index(field)
-        for s_ind in range(self.num_splines):
+        for j, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
             dcpldcp_fe_assemble = assemble(
-                                   self.dcpldcp_forms[field_ind][s_ind])
+                                   self.dcpldcp_forms[field_ind][j])
             dcpldcp_fe_list += [v2p(dcpldcp_fe_assemble)]
         dcpldcp_iga_nest = self.nonmatching_opt.extract_nonmatching_vec(
-                           dcpldcp_fe_list, scalar=True)
+                            dcpldcp_fe_list, 
+                            ind_list=self.shopt_surf_inds[field_ind],
+                            scalar=True)
         if array:
             return get_petsc_vec_array(dcpldcp_iga_nest,
                                        comm=self.nonmatching_opt.comm)

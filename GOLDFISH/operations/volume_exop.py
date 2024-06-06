@@ -6,23 +6,32 @@ class VolumeExOperation(object):
     structure, derivatives of compliacne w.r.t. displacements 
     and control points both in IGA DoFs.
     """
-    def __init__(self, nonmatching_opt):
+    def __init__(self, nonmatching_opt, vol_surf_inds):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
-        self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
 
+        if vol_surf_inds is None:
+            self.vol_surf_inds = list(range(self.num_splines))
+        else:
+            self.vol_surf_inds = vol_surf_inds
+
         self.vol_forms = []
         for s_ind in range(self.num_splines):
-            vol = self.nonmatching_opt.h_th[s_ind]*self.splines[s_ind].dx
+            if s_ind in self.vol_surf_inds:
+                vol = self.nonmatching_opt.h_th[s_ind]*self.splines[s_ind].dx
+            else:
+                vol = Constant(0.)*self.splines[s_ind].dx
             self.vol_forms += [vol]
 
         if self.opt_shape:
+            self.opt_field = self.nonmatching_opt.opt_field
+            self.shopt_surf_inds = self.nonmatching_opt.shopt_surf_inds
             self.dvoldcp_forms = [[] for i in range(len(self.opt_field))]
             for i, field in enumerate(self.opt_field):
-                for s_ind in range(self.num_splines):
+                for j, s_ind in enumerate(self.shopt_surf_inds[i]):
                     dvoldcp = derivative(self.vol_forms[s_ind],
                               self.splines[s_ind].cpFuncs[field])
                     self.dvoldcp_forms[i] += [dvoldcp]
@@ -60,12 +69,14 @@ class VolumeExOperation(object):
     def dvoldCPIGA(self, field, array=True):
         dvoldcp_fe_list = []
         field_ind = self.opt_field.index(field)
-        for s_ind in range(self.num_splines):
+        for j, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
             dvoldcp_fe_assemble = assemble(
-                                  self.dvoldcp_forms[field_ind][s_ind])
+                                  self.dvoldcp_forms[field_ind][j])
             dvoldcp_fe_list += [v2p(dvoldcp_fe_assemble)]
         dvoldcp_iga_nest = self.nonmatching_opt.extract_nonmatching_vec(
-                           dvoldcp_fe_list, scalar=True)
+                           dvoldcp_fe_list, 
+                           ind_list=self.shopt_surf_inds[field_ind], 
+                           scalar=True)
         if array:
             return get_petsc_vec_array(dvoldcp_iga_nest,
                                        comm=self.nonmatching_opt.comm)

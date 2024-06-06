@@ -10,7 +10,6 @@ class IntEnergyExOperation(object):
         self.nonmatching_opt = nonmatching_opt
         self.num_splines = self.nonmatching_opt.num_splines
         self.splines = self.nonmatching_opt.splines
-        self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
         if wint_regu is None:
@@ -37,9 +36,11 @@ class IntEnergyExOperation(object):
             self.dwintdu_forms += [dwintdu]
 
         if self.opt_shape:
+            self.opt_field = self.nonmatching_opt.opt_field
+            self.shopt_surf_inds = self.nonmatching_opt.shopt_surf_inds
             self.dwintdcp_forms = [[] for i in range(len(self.opt_field))]
             for i, field in enumerate(self.opt_field):
-                for s_ind in range(self.num_splines):
+                for j, s_ind in enumerate(self.shopt_surf_inds[i]):
                     dwintdcp = derivative(self.wint_forms[s_ind],
                                self.splines[s_ind].cpFuncs[field])
                     self.dwintdcp_forms[i] += [dwintdcp]
@@ -74,12 +75,14 @@ class IntEnergyExOperation(object):
     def dWintdCPIGA(self, field, array=True):
         dwintdcp_fe_list = []
         field_ind = self.opt_field.index(field)
-        for s_ind in range(self.num_splines):
+        for j, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
             dwintdcp_fe_assemble = assemble(
-                                   self.dwintdcp_forms[field_ind][s_ind])
+                                   self.dwintdcp_forms[field_ind][j])
             dwintdcp_fe_list += [v2p(dwintdcp_fe_assemble)]
         dwintdcp_iga_nest = self.nonmatching_opt.extract_nonmatching_vec(
-                            dwintdcp_fe_list, scalar=True)
+                            dwintdcp_fe_list, 
+                            ind_list=self.shopt_surf_inds[field_ind],
+                            scalar=True)
         if array:
             return get_petsc_vec_array(dwintdcp_iga_nest,
                                        comm=self.nonmatching_opt.comm)
