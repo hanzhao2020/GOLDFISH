@@ -12,7 +12,7 @@ class HthMapComp(om.ExplicitComponent):
         self.options.declare('input_h_th_name_design', default='thickness')
         self.options.declare('output_h_th_name_full', default='thickness_full')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.order = self.options['order']
         self.input_h_th_name_design = self.options['input_h_th_name_design']
@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
     prob = Problem()
     comp = HthMapComp(nonmatching_opt=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

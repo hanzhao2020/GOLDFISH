@@ -11,7 +11,7 @@ class HthFFDReguComp(om.ExplicitComponent):
         self.options.declare('output_h_th_regu_name', 
                              default='thickness_FFD_regu')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.input_h_th_name = self.options['input_h_th_name']
         self.output_h_th_regu_name = self.options['output_h_th_regu_name']
@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = HthFFDReguComp(nonmatching_opt_ffd=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

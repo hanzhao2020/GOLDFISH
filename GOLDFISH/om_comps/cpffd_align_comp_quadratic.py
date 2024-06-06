@@ -2,97 +2,123 @@ from GOLDFISH.nonmatching_opt_ffd import *
 import openmdao.api as om
 from openmdao.api import Problem
 
-
-class CPFFDReguComp(om.ExplicitComponent):
+class CPFFDAlignCompQuad(om.ExplicitComponent):
 
     def initialize(self):
         self.options.declare('nonmatching_opt_ffd')
-        self.options.declare('input_cpffd_design_name_pre', default='CP_FFD')
-        self.options.declare('output_cpregu_name_pre', default='CP_FFD_regu')
+        self.options.declare('input_cpffd_name_pre', default='CP_FFD')
+        self.options.declare('output_cpalign_name_pre', 
+                             default='CP_FFD_align')
 
     def init_parameters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
-        self.input_cpffd_design_name_pre = self.options['input_cpffd_design_name_pre']
-        self.output_cpregu_name_pre = self.options['output_cpregu_name_pre']
+        self.input_cpffd_name_pre = self.options['input_cpffd_name_pre']
+        self.output_cpalign_name_pre = self.options['output_cpalign_name_pre']
 
         self.opt_field = self.nonmatching_opt_ffd.opt_field
-        # self.input_shape = self.nonmatching_opt_ffd.shopt_cpffd_size
-        # self.output_shapes = self.nonmatching_opt_ffd.shopt_cpregu_sizes
-        # self.derivs = self.nonmatching_opt_ffd.shopt_dcpregudcpffd_list
-
+        self.init_cpffd = []
         if self.nonmatching_opt_ffd.shopt_multiffd:
-            self.derivs = self.nonmatching_opt_ffd.shopt_dcpregudcp_mffd
-            self.init_cpffd = self.nonmatching_opt_ffd.shopt_init_cp_mffd_design
-            self.input_shapes = [mat.shape[1] for mat in self.derivs]
-            self.output_shapes = [mat.shape[0] for mat in self.derivs]
+            self.deriv = self.nonmatching_opt_ffd.shopt_dcpaligndcpmultiffd
+            for i, field in enumerate(self.opt_field):
+                self.init_cpffd += [self.nonmatching_opt_ffd.get_init_CPFFD_multiFFD(field),]
         else:
-            self.derivs = self.nonmatching_opt_ffd.shopt_dcpregudcpffd
-            self.init_cpffd = self.nonmatching_opt_ffd.shopt_init_cpffd_design
-            self.input_shapes = [mat.shape[1] for mat in self.derivs]
-            self.output_shapes = [mat.shape[0] for mat in self.derivs]
+            self.deriv = self.nonmatching_opt_ffd.shopt_dcpaligndcpffd
+            for i, field in enumerate(self.opt_field):
+                self.init_cpffd += [self.nonmatching_opt_ffd.shopt_cpffd_flat[:,field]]
+
+        self.input_shape = self.deriv.shape[1]
+        self.output_shape = 1 #self.deriv.shape[0]
 
         self.input_cpffd_name_list = []
-        self.output_cpregu_name_list = []
+        self.output_cpalign_name_list = []
         for i, field in enumerate(self.opt_field):
             self.input_cpffd_name_list += \
-                [self.input_cpffd_design_name_pre+str(field)]
-            self.output_cpregu_name_list += \
-                [self.output_cpregu_name_pre+str(field)]
+                [self.input_cpffd_name_pre+str(field)]
+            self.output_cpalign_name_list += \
+                [self.output_cpalign_name_pre+str(field)]
 
     def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cpffd_name_list[i],
-                           shape=self.input_shapes[i],
+                           shape=self.input_shape,
                            val=self.init_cpffd[i])
-            self.add_output(self.output_cpregu_name_list[i],
-                            shape=self.output_shapes[i])
-            self.declare_partials(self.output_cpregu_name_list[i],
-                                  self.input_cpffd_name_list[i],
-                                  val=self.derivs[i].data,
-                                  rows=self.derivs[i].row,
-                                  cols=self.derivs[i].col)
+                               #+np.random.random(self.input_shape))
+            self.add_output(self.output_cpalign_name_list[i],
+                            shape=self.output_shape)
+            self.declare_partials(self.output_cpalign_name_list[i],
+                                  self.input_cpffd_name_list[i],)
+                                #   val=self.deriv.data,
+                                #   rows=self.deriv.row,
+                                #   cols=self.deriv.col)
+
+    # def compute(self, inputs, outputs):
+    #     for i, field in enumerate(self.opt_field):
+    #         outputs[self.output_cpalign_name_list[i]] = \
+    #             self.deriv*inputs[self.input_cpffd_name_list[i]]
 
     def compute(self, inputs, outputs):
+        deriv_row = self.deriv.row
+        deriv_col = self.deriv.col
+        deriv_data = self.deriv.data
         for i, field in enumerate(self.opt_field):
-            outputs[self.output_cpregu_name_list[i]] = \
-                self.derivs[i]*inputs[self.input_cpffd_name_list[i]]
+            output_val = 0
+            input_array = inputs[self.input_cpffd_name_list[i]]
+            for align_ind in range(self.deriv.shape[0]):
+                dof0 = deriv_col[align_ind*2]
+                dof1 = deriv_col[align_ind*2+1]
+                coeff0 = deriv_data[align_ind*2]
+                coeff1 = deriv_data[align_ind*2+1]
+                output_val += (coeff0*input_array[dof0] 
+                               + coeff1*input_array[dof1])**2
+            outputs[self.output_cpalign_name_list[i]] = output_val
+
+    def compute_partials(self, inputs, partials):
+        deriv_row = self.deriv.row
+        deriv_col = self.deriv.col
+        deriv_data = self.deriv.data
+        for i, field in enumerate(self.opt_field):
+            deriv_array = np.zeros(self.input_shape)
+            input_array = inputs[self.input_cpffd_name_list[i]]
+            for align_ind in range(self.deriv.shape[0]):
+                dof0 = deriv_col[align_ind*2]
+                dof1 = deriv_col[align_ind*2+1]
+                coeff0 = deriv_data[align_ind*2]
+                coeff1 = deriv_data[align_ind*2+1]
+                deriv_array[dof0] += coeff0*2*(coeff0*input_array[dof0] 
+                                    + coeff1*input_array[dof1])
+                deriv_array[dof1] += coeff1*2*(coeff0*input_array[dof0] 
+                                    + coeff1*input_array[dof1])
+            partials[self.output_cpalign_name_list[i], 
+                     self.input_cpffd_name_list[i]] = deriv_array
+        
 
 
 if __name__ == "__main__":
-    from GOLDFISH.tests.test_tbeam import nonmatching_opt
-    # from GOLDFISH.tests.test_slr import nonmatching_opt
+    # from GOLDFISH.tests.test_tbeam import nonmatching_opt
+    # # from GOLDFISH.tests.test_slr import nonmatching_opt
 
-    nonmatching_opt.set_shopt_FFD_surf_inds(opt_field=[0,1,2], opt_surf_inds=[0,1])
-    
-    ffd_block_num_el = [4,4,1]
-    p = 3
-    # Create FFD block in igakit format
-    cp_ffd_lims = nonmatching_opt.cpsurf_des_lims
-    for field in [2]:
-        cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
-        cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
-        cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
-    FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    nonmatching_opt.set_shopt_FFD(FFD_block.knots, FFD_block.control)
-    nonmatching_opt.set_shopt_align_CPFFD(align_dir=[[1],[2],[0]])
-    nonmatching_opt.set_shopt_pin_CPFFD(pin_dir0=[0, 0, 0],
-                                        pin_side0=[[0], [0], [0]],
-                                        pin_dir1=[None, None, None],
-                                        pin_side1=[None, None, None])
-    nonmatching_opt.set_shopt_regu_CPFFD()
+    # ffd_block_num_el = [4,4,1]
+    # p = 3
+    # # Create FFD block in igakit format
+    # cp_ffd_lims = nonmatching_opt.cpsurf_lims
+    # for field in [2]:
+    #     cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
+    #     cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
+    #     cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
+    # FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
+    # nonmatching_opt.set_shopt_FFD(FFD_block.knots, FFD_block.control)
+    # nonmatching_opt.set_shopt_align_CPFFD(shopt_align_dir=1)
 
-    prob = Problem()
-    comp = CPFFDReguComp(nonmatching_opt_ffd=nonmatching_opt)
-    comp.init_parameters()
-    prob.model = comp
-    prob.setup()
-    prob.run_model()
-    prob.model.list_outputs()
-    print('check_partials:')
-    prob.check_partials(compact_print=True)
+    # prob = Problem()
+    # comp = CPFFDAlignCompQuad(nonmatching_opt_ffd=nonmatching_opt)
+    # comp.init_parameters()
+    # prob.model = comp
+    # prob.setup()
+    # prob.run_model()
+    # prob.model.list_outputs()
+    # print('check_partials:')
+    # prob.check_partials(compact_print=True)
 
-
-    '''
     import sys
     import numpy as np
     import matplotlib.pyplot as plt
@@ -266,7 +292,7 @@ if __name__ == "__main__":
     a3 = nonmatching_opt.set_shopt_align_CP_multiFFD(shopt_align_dir_list=[1,1])
 
     prob = Problem()
-    comp = CPFFDReguComp(nonmatching_opt_ffd=nonmatching_opt)
+    comp = CPFFDAlignCompQuad(nonmatching_opt_ffd=nonmatching_opt)
     comp.init_parameters()
     prob.model = comp
     prob.setup()
@@ -274,4 +300,3 @@ if __name__ == "__main__":
     prob.model.list_outputs()
     print('check_partials:')
     prob.check_partials(compact_print=True)
-    '''

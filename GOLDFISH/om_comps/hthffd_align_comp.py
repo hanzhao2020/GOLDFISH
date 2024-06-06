@@ -10,7 +10,7 @@ class HthFFDAlignComp(om.ExplicitComponent):
         self.options.declare('output_h_th_align_name', 
                              default='thickness_FFD_align')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.input_h_th_name = self.options['input_h_th_name']
         self.output_h_th_align_name = self.options['output_h_th_align_name']
@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = HthFFDAlignComp(nonmatching_opt_ffd=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

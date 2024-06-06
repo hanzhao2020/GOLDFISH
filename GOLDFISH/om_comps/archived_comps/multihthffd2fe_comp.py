@@ -3,7 +3,9 @@ from GOLDFISH.nonmatching_opt_ffd import *
 import openmdao.api as om
 from openmdao.api import Problem
 
-class HthFFD2FEComp(om.ExplicitComponent):
+from scipy.sparse import block_diag
+
+class MultiHthFFD2FEComp(om.ExplicitComponent):
 
     def initialize(self):
         self.options.declare('nonmatching_opt_ffd')
@@ -14,14 +16,9 @@ class HthFFD2FEComp(om.ExplicitComponent):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.input_h_th_ffd_name = self.options['input_h_th_ffd_name']
         self.output_h_th_fe_name = self.options['output_h_th_fe_name']
-
-        if self.nonmatching_opt_ffd.thopt_multiffd:
-            self.init_h_th_ffd = self.nonmatching_opt_ffd.get_init_h_th_multiFFD()
-            self.deriv_mat = self.nonmatching_opt_ffd.thopt_dcpsurf_fedcpmultiffd
-        else:
-            self.init_h_th_ffd = self.nonmatching_opt_ffd.get_init_h_th_FFD()
-            self.deriv_mat = self.nonmatching_opt_ffd.thopt_dcpsurf_fedcpffd
-        
+        self.num_splines = self.nonmatching_opt_ffd.num_splines
+        self.init_h_th_ffd = self.nonmatching_opt_ffd.get_init_h_th_multiFFD()
+        self.deriv_mat = self.nonmatching_opt_ffd.dcpsurf_fedcpmultiffd
         self.input_shape = self.deriv_mat.shape[1]
         self.output_shape = self.deriv_mat.shape[0]
 
@@ -43,32 +40,6 @@ class HthFFD2FEComp(om.ExplicitComponent):
 
 
 if __name__ == "__main__":
-    # # Test for single thickness FFD blocks
-    # from GOLDFISH.tests.test_tbeam import nonmatching_opt
-    # # from GOLDFISH.tests.test_slr import nonmatching_opt
-
-    # ffd_block_num_el = [4,4,1]
-    # p = 3
-    # # Create FFD block in igakit format
-    # cp_ffd_lims = nonmatching_opt.cpsurf_lims
-    # for field in [2]:
-    #     cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
-    #     cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
-    #     cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
-    # FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
-    # nonmatching_opt.set_thopt_FFD(FFD_block.knots, FFD_block.control)
-
-    # prob = Problem()
-    # comp = HthFFD2FEComp(nonmatching_opt_ffd=nonmatching_opt)
-    # comp.init_parameters()
-    # prob.model = comp
-    # prob.setup()
-    # prob.run_model()
-    # prob.model.list_outputs()
-    # print('check_partials:')
-    # prob.check_partials(compact_print=True)
-
-    # # Test for multi thickness FFD blocks
     from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
 
@@ -82,12 +53,12 @@ if __name__ == "__main__":
         cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.2*cp_range
     FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
     # nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
-    nonmatching_opt.set_thopt_multiFFD_surf_inds([[1],[0]])
-    nonmatching_opt.set_thopt_multiFFD([FFD_block.knots]*2, [FFD_block.control]*2)
-    a0 = nonmatching_opt.set_thopt_align_CP_multiFFD([[2],[0]])
+    nonmatching_opt.set_multiFFD_surf_inds([[1],[0]])
+    nonmatching_opt.set_multiFFD([FFD_block.knots]*2, [FFD_block.control]*2)
+    a0 = nonmatching_opt.set_align_CP_multiFFD([[2],[0]])
 
     prob = Problem()
-    comp = HthFFD2FEComp(nonmatching_opt_ffd=nonmatching_opt)
+    comp = MultiHthFFD2FEComp(nonmatching_opt_ffd=nonmatching_opt)
     comp.init_parameters()
     prob.model = comp
     prob.setup()

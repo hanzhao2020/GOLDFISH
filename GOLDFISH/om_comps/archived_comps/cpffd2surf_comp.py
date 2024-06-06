@@ -15,25 +15,12 @@ class CPFFD2SurfComp(om.ExplicitComponent):
         self.input_cpffd_name_pre = self.options['input_cpffd_name_pre']
         self.output_cpsurf_name_pre = self.options['output_cpsurf_name_pre']
 
+        self.deriv = self.nonmatching_opt_ffd.shopt_dcpsurf_fedcpffd
         self.opt_field = self.nonmatching_opt_ffd.opt_field
         self.nsd = self.nonmatching_opt_ffd.nsd
-        self.init_cpffd = []
-        if self.nonmatching_opt_ffd.shopt_multiffd:
-            self.derivs = self.nonmatching_opt_ffd.shopt_dcpsurf_fedcp_mffd
-            self.input_shapes = [len(dof) for dof in 
-                self.nonmatching_opt_ffd.shopt_cp_mffd_design_dof_full]
-            for i, field in enumerate(self.opt_field):
-                self.init_cpffd += [self.nonmatching_opt_ffd.shopt_init_cp_mffd_full[field]]
-        else:
-            deriv = self.nonmatching_opt_ffd.shopt_dcpsurf_fedcpffd
-            self.derivs = [deriv]*len(self.opt_field)
-            self.input_shapes = [len(dof) for dof in 
-                self.nonmatching_opt_ffd.shopt_cpffd_design_dof_full]
-            for i, field in enumerate(self.opt_field):
-                self.init_cpffd += [self.nonmatching_opt_ffd.shopt_cpffd_flat[:,field]]
-
-        self.output_shapes = [cp_fe.size for cp_fe in 
-                              self.nonmatching_opt_ffd.cpdes_fe_nest]
+        self.knotsffd = self.nonmatching_opt_ffd.shopt_knotsffd
+        self.input_shape = self.nonmatching_opt_ffd.shopt_cpffd_size
+        self.output_shape = self.nonmatching_opt_ffd.cpsurf_fe_list.shape[0]
 
         self.input_cpffd_name_list = []
         self.output_cpsurf_name_list = []
@@ -46,20 +33,21 @@ class CPFFD2SurfComp(om.ExplicitComponent):
     def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cpffd_name_list[i],
-                           shape=self.input_shapes[i],
-                           val=self.init_cpffd[i])
+                           shape=self.input_shape,
+                           val=self.nonmatching_opt_ffd.\
+                           shopt_cpffd_flat[:,field])
             self.add_output(self.output_cpsurf_name_list[i],
-                            shape=self.output_shapes[i])
+                            shape=self.output_shape)
             self.declare_partials(self.output_cpsurf_name_list[i],
                                   self.input_cpffd_name_list[i],
-                                  val=self.derivs[i].data,
-                                  rows=self.derivs[i].row,
-                                  cols=self.derivs[i].col)
+                                  val=self.deriv.data,
+                                  rows=self.deriv.row,
+                                  cols=self.deriv.col)
 
     def compute(self, inputs, outputs):
         for i, field in enumerate(self.opt_field):
             outputs[self.output_cpsurf_name_list[i]] = \
-                self.derivs[i]*inputs[self.input_cpffd_name_list[i]]
+                self.deriv*inputs[self.input_cpffd_name_list[i]]
 
 
 if __name__ == "__main__":

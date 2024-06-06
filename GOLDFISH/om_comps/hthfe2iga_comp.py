@@ -10,7 +10,7 @@ class HthFE2IGAComp(om.ImplicitComponent):
         self.options.declare('input_h_th_fe_name', default='thickness_FE')
         self.options.declare('output_h_th_iga_name', default='thickness_IGA')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_h_th_fe_name = self.options['input_h_th_fe_name']
         self.output_h_th_iga_name = self.options['output_h_th_iga_name']
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = HthFE2IGAComp(nonmatching_opt=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()
