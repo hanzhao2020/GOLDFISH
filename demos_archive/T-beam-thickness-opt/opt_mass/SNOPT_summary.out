@@ -1,0 +1,50 @@
+
+ ==============================
+ S N O P T  7.2-5    (May 2007)
+ ==============================
+ 
+ SNMEMB EXIT 100 -- finished successfully
+ SNMEMB INFO 104 -- memory requirements estimated
+
+ ==============================
+ S N O P T  7.2-5    (May 2007)
+ ==============================
+ 
+ 
+
+ Nonlinear constraints       1     Linear constraints       0
+ Nonlinear variables         2     Linear variables         0
+ Jacobian  variables         2     Objective variables      2
+ Total constraints           1     Total variables          2
+ 
+
+ 
+ The user has defined       2   out of       2   constraint gradients.
+ The user has defined       2   out of       2   objective  gradients.
+ 
+
+ Major Minors     Step   nCon Feasible  Optimal  MeritFunction    nS Penalty
+     0      2               1 (0.0E+00) 9.0E-01  4.0000000E+00                 r
+ 
+ SNOPTC EXIT  40 -- terminated after numerical difficulties
+ SNOPTC INFO  43 -- cannot satisfy the general constraints
+
+ Problem name                 O
+ No. of iterations                   2   Objective value      6.9099102702E-01
+ No. of major iterations             1   Linear objective     0.0000000000E+00
+ Penalty parameter           0.000E+00   Nonlinear objective  6.9099102702E-01
+ No. of calls to funobj             12   No. of calls to funcon             12
+ No. of degenerate steps             0   Percentage                       0.00
+ Max x                       1 1.7E-02   Max pi                      1 0.0E+00
+ Max Primal infeas           0 0.0E+00   Max Dual infeas             0 0.0E+00
+ Nonlinear constraint violn    7.0E+04
+ 
+ 
+
+ Solution printed on file  18
+ 
+ Time for MPS input                             0.00 seconds
+ Time for solving problem                      38.57 seconds
+ Time for solution output                       0.00 seconds
+ Time for constraint functions                 43.25 seconds
+ Time for objective function                    0.00 seconds

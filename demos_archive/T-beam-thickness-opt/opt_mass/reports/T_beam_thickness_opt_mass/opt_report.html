@@ -1,0 +1,115 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<title>OpenMDAO Optimization Report for Problem T_beam_thickness_opt_mass</title>
+
+<!-- CSS style to set alternate table
+row using color -->
+<style>
+    body {
+        font: normal 10px Verdana, Arial, sans-serif;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 90%;
+    }
+
+    th {
+      background-color: SlateGray;
+      color: white;
+      }
+
+    th, td {
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: LightGray;
+    }
+
+    tr:nth-child(odd) {
+        background-color: GhostWhite;
+    }
+
+    span.equality-constraint {
+        font-size: 25px;
+     }
+    span.equality-constraint-satisfied {
+        font-size: 25px;
+        color: green;
+     }
+    span.equality-constraint-violated {
+        font-size: 25px;
+        color: red;
+     }
+</style>
+</head>
+
+<body>
+<h1>OpenMDAO Optimization Report for Problem T_beam_thickness_opt_mass (All values are in unscaled, physical units)</h1>
+<table>
+<tbody>
+<tr><td>Problem:                    </td><td>T_beam_thickness_opt_mass                        </td></tr>
+<tr><td>Script:                     </td><td>T_beam_thickness_opt_mass.py                     </td></tr>
+<tr><td>Optimizer:                  </td><td>pyOptSparse_SNOPT                                </td></tr>
+<tr><td>Number of driver iterations:</td><td>13                                               </td></tr>
+<tr><td>Number of objective calls:  </td><td>12                                               </td></tr>
+<tr><td>Number of derivative calls: </td><td>11                                               </td></tr>
+<tr><td>Execution start time:       </td><td>2023-03-31 17:27:25                              </td></tr>
+<tr><td>Wall clock run time:        </td><td>00 hours 00 minutes 26 seconds 318.2 milliseconds</td></tr>
+<tr><td>Exit status:                </td><td>FAIL                                             </td></tr>
+</tbody>
+</table>
+<h2>Objectives</h2>
+<table>
+<thead>
+<tr><th>name              </th><th>val       </th><th>ref       </th><th>ref0      </th><th>adder  </th><th>scaler  </th><th>units  </th></tr>
+</thead>
+<tbody>
+<tr><td>volume_comp.volume</td><td>6.9099e-01</td><td>1.0000e+00</td><td>0.0000e+00</td><td>       </td><td>        </td><td>       </td></tr>
+</tbody>
+</table>
+<h2>Design Variables</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">        name         </th><th style="text-align: center;"> alias </th><th>size  </th><th style="text-align: center;">  min   </th><th style="text-align: center;">  max   </th><th style="text-align: center;">  mean  </th><th>lower     </th><th>upper  </th><th style="text-align: center;"> equals </th><th>ref  </th><th>ref0  </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             visual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">inputs_comp.thickness</td><td style="text-align: center;">       </td><td>2     </td><td style="text-align: center;">|0.0173|</td><td style="text-align: center;">|0.0173|</td><td style="text-align: center;">|0.0173|</td><td>1.0000e-02</td><td>1      </td><td style="text-align: center;">        </td><td>1    </td><td>0     </td><td style="text-align: center;">       </td><td style="text-align: center;"><img width=300 src='data:image/png;base64,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'></td></tr>
+</tbody>
+</table>
+<h2>Constraints</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">          name           </th><th style="text-align: center;"> alias </th><th>size  </th><th>min       </th><th style="text-align: center;">                        max                         </th><th>mean      </th><th style="text-align: center;"> lower </th><th>upper     </th><th style="text-align: center;"> equals </th><th>ref  </th><th>ref0  </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           visual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">max_vM_comp.max_vM_stress</td><td style="text-align: center;">       </td><td>1     </td><td>1.2000e+05</td><td style="text-align: center;"><span style="color:rgb(213, 94, 0)">(1.2e+05)</span></td><td>1.2000e+05</td><td style="text-align: center;">       </td><td>5.0000e+04</td><td style="text-align: center;">        </td><td>1    </td><td>0     </td><td style="text-align: center;">       </td><td style="text-align: center;"><img width=300 src='data:image/png;base64,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'></td></tr>
+</tbody>
+</table>
+<h2>Optimizer settings</h2>
+
+<table>
+<thead>
+<tr><th>Setting              </th><th>Val                            </th><th>Description                                                                                                                                           </th></tr>
+</thead>
+<tbody>
+<tr><td>debug_print          </td><td>[&#x27;objs&#x27;]                       </td><td>List of what type of Driver variables to print at each iteration.                                                                                     </td></tr>
+<tr><td>optimizer            </td><td>SNOPT                          </td><td>Name of optimizers to use                                                                                                                             </td></tr>
+<tr><td>title                </td><td>Optimization using pyOpt_sparse</td><td>Title of this optimization run                                                                                                                        </td></tr>
+<tr><td>print_opt_prob       </td><td>False                          </td><td>Print the opt problem summary before running the optimization                                                                                         </td></tr>
+<tr><td>print_results        </td><td>True                           </td><td>Print pyOpt results if True                                                                                                                           </td></tr>
+<tr><td>gradient_method      </td><td>openmdao                       </td><td>Finite difference implementation to use                                                                                                               </td></tr>
+<tr><td>user_terminate_signal</td><td>                               </td><td>OS signal that triggers a clean user-termination. Only SNOPT supports this option.                                                                    </td></tr>
+<tr><td>singular_jac_behavior</td><td>warn                           </td><td>Defines behavior of a zero row/col check after first call tocompute_totals:error - raise an error.warn - raise a warning.ignore - don&#x27;t perform check.</td></tr>
+<tr><td>singular_jac_tol     </td><td>1e-16                          </td><td>Tolerance for zero row/column check.                                                                                                                  </td></tr>
+</tbody>
+</table>
+</body>
+
+</html>
