@@ -1,7 +1,3 @@
-"""
-The compressed PEGASUS wing geometry can be downloaded from:
-    https://drive.google.com/file/d/1sf8KFL2EJhsUOaMJASnAAZXfvfzNnfuN/view?usp=sharing
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 import openmdao.api as om
@@ -154,9 +150,13 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
+test_ind = 44
+# optimizer = 'SLSQP'
 optimizer = 'SNOPT'
-save_path = './'
-folder_name = "results/"
+# save_path = './'
+save_path = '/home/han/Documents/test_results/'
+# folder_name = "results/"
+folder_name = "results"+str(test_ind)+"/"
 
 # Define parameters
 # Scale down the geometry using ``geom_scale``to make the length 
@@ -182,10 +182,21 @@ pegasus_surfaces = [topoface2surface(face, BSpline=True)
 # Rear spars: 3, 7, 11, 15, ..., 67
 # Ribs: 68, 69, 70, ..., 85 (18 ribs)
 wing_indices = list(range(0,len(pegasus_surfaces)))
+# wing_indices = list(range(0,8)) + [68, 69, 70]
 wing_surfaces = [pegasus_surfaces[i] for i in wing_indices]
 num_surfs = len(wing_surfaces)
 if mpirank == 0:
     print("Number of surfaces:", num_surfs)
+
+# # Save original surfaces
+# from PENGoLINS.igakit_utils import *
+# from igakit.io import VTK
+# ik_surfs = []
+# for i in range(num_surfs):
+#     ik_surf = BSpline_surface2ikNURBS(wing_surfaces[i])
+#     ik_surfs += [ik_surf]
+#     VTK().write("./geometry/wing_init_surf_"+str(i)+".vtk", ik_surf)
+# exit()
 
 num_pts_eval = [6]*num_surfs
 ref_level_list = [1]*num_surfs
@@ -209,6 +220,9 @@ preprocessor.reparametrize_BSpline_surfaces(num_pts_eval, num_pts_eval,
 preprocessor.refine_BSpline_surfaces(p, p, u_num_insert, v_num_insert, 
                                      correct_element_shape=True)
 
+# write_geom_file(preprocessor.BSpline_surfs_refine, "pegasus_wing_geom.igs")
+# exit()
+
 if mpirank == 0:
     print("Computing intersections...")
 int_data_filename = "pegasus_wing_int_data.npz"
@@ -228,6 +242,7 @@ if mpirank == 0:
 # display, start_display, add_menu, add_function_to_menu = init_display()
 # # preprocessor.display_surfaces(display, transparency=0.5, show_bdry=False, save_fig=False)
 # preprocessor.display_intersections(display, color='RED', save_fig=False)
+# print(aaa)
 
 if mpirank == 0:
     print("Creating splines...")
@@ -251,9 +266,12 @@ for i in range(num_surfs):
     h_th[i].interpolate(Constant(5.0e-3))
 
 # Create non-matching problem
+# problem = NonMatchingCoupling(splines, E, h_th, nu, comm=worldcomm)
 nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, opt_shape=False, 
                                  opt_thickness=True, comm=worldcomm)
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
+
+print(aaa)
 
 if mpirank == 0:
     print("Setting up mortar meshes...")
@@ -281,6 +299,7 @@ for i in range(num_surfs):
                   source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
 
+
 # Set up optimization
 nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
                              thickness=nonmatching_opt.opt_thickness)
@@ -296,9 +315,9 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.opt_settings['Major optimality tolerance'] = 1e-4
     prob.driver.opt_settings['Major iterations limit'] = 50000
     prob.driver.opt_settings['Summary file'] = \
-        './SNOPT_report/SNOPT_summary.out'
+        './SNOPT_report/SNOPT_summary'+str(test_ind)+'.out'
     prob.driver.opt_settings['Print file'] = \
-        './SNOPT_report/SNOPT_print.out'
+        './SNOPT_report/SNOPT_print'+str(test_ind)+'.out'
     prob.driver.options['debug_print'] = ['objs']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
@@ -316,8 +335,8 @@ opt_data_dir = save_path+folder_name+'opt_data/'
 if not os.path.isdir(opt_data_dir):
     os.mkdir(opt_data_dir)
 
-recorder_name = opt_data_dir+'recorder.sql'
-shopt_data_name = opt_data_dir+'shopt_ffd_data.npz'
+recorder_name = opt_data_dir+'recorder'+str(test_ind)+'.sql'
+shopt_data_name = opt_data_dir+'shopt_ffd_data'+str(test_ind)+'.npz'
 
 prob.driver.recording_options['includes'] = ['*']
 prob.driver.recording_options['record_objectives'] = True
@@ -333,6 +352,9 @@ prob.driver.add_recorder(recorder)
 
 prob.setup()
 prob.run_driver()
+
+# prob.setup()
+# prob.run_driver()
 
 if mpirank == 0:
     for i in range(num_surfs):

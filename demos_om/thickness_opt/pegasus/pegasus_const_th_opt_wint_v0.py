@@ -1,7 +1,3 @@
-"""
-The compressed PEGASUS wing geometry can be downloaded from:
-    https://drive.google.com/file/d/1sf8KFL2EJhsUOaMJASnAAZXfvfzNnfuN/view?usp=sharing
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 import openmdao.api as om
@@ -27,7 +23,7 @@ class ThicknessOptGroup(om.Group):
         self.int_energy_name = self.options['int_energy_name']
         self.volume_name = self.options['volume_name']
 
-        self.design_var_lower = 1.0e-3
+        self.design_var_lower = 5.0e-4
         self.design_var_upper = 1.0e-1
 
         self.num_splines = self.nonmatching_opt.num_splines
@@ -122,7 +118,7 @@ class ThicknessOptGroup(om.Group):
 
         self.add_objective(self.int_energy_comp_name+'.'
                            +self.int_energy_name,
-                           scaler=1e1)
+                           scaler=1e3)
 
 def clampedBC(spline_generator, side=0, direction=0):
     """
@@ -154,7 +150,8 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-optimizer = 'SNOPT'
+optimizer = 'SLSQP'
+# optimizer = 'SNOPT'
 save_path = './'
 folder_name = "results/"
 
@@ -165,7 +162,7 @@ folder_name = "results/"
 geom_scale = 2.54e-5  # Convert current length unit to m
 E = Constant(68e9)  # Young's modulus, Pa
 nu = Constant(0.35)  # Poisson's ratio
-h_th = Constant(5.0e-3)  # Thickness of surfaces, m
+h_th = Constant(3.0e-3)  # Thickness of surfaces, m
 
 p = 3  # spline order
 penalty_coefficient = 1.0e3
@@ -176,11 +173,11 @@ igs_shapes = read_igs_file(filename_igs, as_compound=False)
 pegasus_surfaces = [topoface2surface(face, BSpline=True) 
                   for face in igs_shapes]
 
-# Upper skins: 0, 4, 8, 12, ..., 64
-# Lower skins: 1, 5, 9, 13, ..., 65
-# Front spars: 2, 6, 19, 14, ..., 66
-# Rear spars: 3, 7, 11, 15, ..., 67
-# Ribs: 68, 69, 70, ..., 85 (18 ribs)
+# Upper skins: 0, 4, 8, 12, ..., 68
+# Lower skins: 1, 5, 9, 13, ..., 69
+# Front spars: 2, 6, 19, 14, ..., 70
+# Rear spars: 3, 7, 11, 15, ..., 71
+# Ribs: 72, 73, 74, ..., 89 (18 ribs)
 wing_indices = list(range(0,len(pegasus_surfaces)))
 wing_surfaces = [pegasus_surfaces[i] for i in wing_indices]
 num_surfs = len(wing_surfaces)
@@ -226,7 +223,7 @@ if mpirank == 0:
 # # Display B-spline surfaces and intersections using 
 # # PythonOCC build-in 3D viewer.
 # display, start_display, add_menu, add_function_to_menu = init_display()
-# # preprocessor.display_surfaces(display, transparency=0.5, show_bdry=False, save_fig=False)
+# # preprocessor.display_surfaces(display, save_fig=False)
 # preprocessor.display_intersections(display, color='RED', save_fig=False)
 
 if mpirank == 0:
@@ -248,9 +245,10 @@ for i in range(num_surfs):
 h_th = []
 for i in range(num_surfs):
     h_th += [Function(splines[i].V_linear)]
-    h_th[i].interpolate(Constant(5.0e-3))
+    h_th[i].interpolate(Constant(3.0e-3))
 
 # Create non-matching problem
+# problem = NonMatchingCoupling(splines, E, h_th, nu, comm=worldcomm)
 nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, opt_shape=False, 
                                  opt_thickness=True, comm=worldcomm)
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
@@ -281,6 +279,7 @@ for i in range(num_surfs):
                   source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
 
+
 # Set up optimization
 nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
                              thickness=nonmatching_opt.opt_thickness)
@@ -292,13 +291,11 @@ if optimizer.upper() == 'SNOPT':
     prob.driver = om.pyOptSparseDriver()
     prob.driver.options['optimizer'] = 'SNOPT'
     prob.driver.opt_settings['Minor feasibility tolerance'] = 1e-6
-    prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
-    prob.driver.opt_settings['Major optimality tolerance'] = 1e-4
+    prob.driver.opt_settings['Major feasibility tolerance'] = 1e-5
+    prob.driver.opt_settings['Major optimality tolerance'] = 1e-5
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = \
-        './SNOPT_report/SNOPT_summary.out'
-    prob.driver.opt_settings['Print file'] = \
-        './SNOPT_report/SNOPT_print.out'
+    prob.driver.opt_settings['Summary file'] = 'SNOPT_summary.out'
+    prob.driver.opt_settings['Print file'] = 'SNOPT_print.out'
     prob.driver.options['debug_print'] = ['objs']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
@@ -310,26 +307,6 @@ elif optimizer.upper() == 'SLSQP':
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
-
-# Create a recorder variable
-opt_data_dir = save_path+folder_name+'opt_data/'
-if not os.path.isdir(opt_data_dir):
-    os.mkdir(opt_data_dir)
-
-recorder_name = opt_data_dir+'recorder.sql'
-shopt_data_name = opt_data_dir+'shopt_ffd_data.npz'
-
-prob.driver.recording_options['includes'] = ['*']
-prob.driver.recording_options['record_objectives'] = True
-prob.driver.recording_options['record_derivatives'] = False
-prob.driver.recording_options['record_constraints'] = True
-prob.driver.recording_options['record_desvars'] = True
-prob.driver.recording_options['record_inputs'] = True
-prob.driver.recording_options['record_outputs'] = True
-prob.driver.recording_options['record_residuals'] = True
-
-recorder = om.SqliteRecorder(recorder_name)
-prob.driver.add_recorder(recorder)
 
 prob.setup()
 prob.run_driver()
