@@ -1,6 +1,6 @@
 """
-The compressed T-beam geometry can be downloaded from:
-    https://drive.google.com/file/d/1nE7eRklP8EEqTT2b5GbwNXeaBi02F3PN/view?usp=sharing
+Initial geometry can be downloaded from the following link:
+https://drive.google.com/file/d/1fRaho_xzmChlgLdrMM9CQ7WTqr9_DItt/view?usp=share_link
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +8,8 @@ import openmdao.api as om
 from igakit.cad import *
 from igakit.io import VTK
 from GOLDFISH.nonmatching_opt_om import *
+
+from int_energy_regu_comp import *
 
 class ShapeOptGroup(om.Group):
 
@@ -23,7 +25,7 @@ class ShapeOptGroup(om.Group):
         self.options.declare('cpffd_regu_name_pre', default='CP_FFD_regu')
         self.options.declare('volume_name', default='volume')
 
-    def init_parameters(self):
+    def init_parameters(self, design_var_lims):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.cpffd_name_pre = self.options['cpffd_name_pre']
         self.cpsurf_fe_name_pre = self.options['cpsurf_fe_name_pre']
@@ -34,10 +36,11 @@ class ShapeOptGroup(om.Group):
         self.cpffd_pin_name_pre = self.options['cpffd_pin_name_pre']
         self.cpffd_regu_name_pre = self.options['cpffd_regu_name_pre']
         self.volume_name = self.options['volume_name']
+        self.design_var_lims = design_var_lims
 
         self.opt_field = self.nonmatching_opt_ffd.opt_field
-        self.design_var_lower = -1.2
-        self.design_var_upper = 1.2
+        # self.design_var_lower = self.design_var_lim[0]
+        # self.design_var_upper = self.design_var_lim[1]
 
         self.cpffd_name_list = []
         self.cpsurf_fe_name_list = []
@@ -69,12 +72,12 @@ class ShapeOptGroup(om.Group):
         inputs_comp = om.IndepVarComp()
         for i, field in enumerate(self.opt_field):
             inputs_comp.add_output(self.cpffd_name_list[i],
-                        shape=self.nonmatching_opt_ffd.shopt_cpffd_size,
-                        val=self.nonmatching_opt_ffd.shopt_cpffd_flat[:,field])
+                        shape=self.nonmatching_opt_ffd.cpffd_size,
+                        val=self.nonmatching_opt_ffd.cpffd_flat[:,field])
         self.add_subsystem(self.inputs_comp_name, inputs_comp)
 
         # Add FFD comp
-        self.ffd2surf_comp = CPFFD2SurfComp(
+        self.ffd2surf_comp = FFD2SurfComp(
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_cpffd_name_pre=self.cpffd_name_pre,
                         output_cpsurf_name_pre=self.cpsurf_fe_name_pre)
@@ -99,7 +102,7 @@ class ShapeOptGroup(om.Group):
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
         # Add internal energy comp (objective function)
-        self.int_energy_comp = IntEnergyComp(
+        self.int_energy_comp = IntEnergyReguComp(
                           nonmatching_opt=self.nonmatching_opt_ffd,
                           input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                           input_u_name=self.disp_name,
@@ -107,15 +110,15 @@ class ShapeOptGroup(om.Group):
         self.int_energy_comp.init_parameters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
-        # Add CP FFD align comp (linear constraint)
-        self.cpffd_align_comp = CPFFDAlignComp(
-            nonmatching_opt_ffd=self.nonmatching_opt_ffd,
-            input_cpffd_name_pre=self.cpffd_name_pre,
-            output_cpalign_name_pre=self.cpffd_align_name_pre)
-        self.cpffd_align_comp.init_parameters()
-        self.add_subsystem(self.cpffd_align_comp_name, self.cpffd_align_comp)
-        self.cpffd_align_cons_val = \
-            np.zeros(self.cpffd_align_comp.output_shape)
+        # # Add CP FFD align comp (linear constraint)
+        # self.cpffd_align_comp = CPFFDAlignComp(
+        #     nonmatching_opt_ffd=self.nonmatching_opt_ffd,
+        #     input_cpffd_name_pre=self.cpffd_name_pre,
+        #     output_cpalign_name_pre=self.cpffd_align_name_pre)
+        # self.cpffd_align_comp.init_parameters()
+        # self.add_subsystem(self.cpffd_align_comp_name, self.cpffd_align_comp)
+        # self.cpffd_align_cons_val = \
+        #     np.zeros(self.cpffd_align_comp.output_shape)
 
         # Add CP FFD pin comp (linear constraint)
         self.cpffd_pin_comp = CPFFDPinComp(
@@ -126,8 +129,8 @@ class ShapeOptGroup(om.Group):
         self.add_subsystem(self.cpffd_pin_comp_name, self.cpffd_pin_comp)
         self.cpffd_pin_cons_val = []
         for i, field in enumerate(self.opt_field):
-            self.cpffd_pin_cons_val += [self.nonmatching_opt_ffd.shopt_cpffd_flat
-                                [:,field][self.nonmatching_opt_ffd.shopt_pin_dof]]
+            self.cpffd_pin_cons_val += [self.nonmatching_opt_ffd.cpffd_flat
+                                [:,field][self.nonmatching_opt_ffd.pin_dof]]
 
         # Add CP FFD regu comp (linear constraint)
         self.cpffd_regu_comp = CPFFDReguComp(
@@ -137,7 +140,7 @@ class ShapeOptGroup(om.Group):
         self.cpffd_regu_comp.init_parameters()
         self.add_subsystem(self.cpffd_regu_comp_name, self.cpffd_regu_comp)
         self.cpffd_regu_lower = [np.ones(self.cpffd_regu_comp.\
-                                 output_shapes[i])*1.e-1
+                                 output_shapes[i])*2e-2
                                  for i in range(len(self.opt_field))]
 
         # Add volume comp (constraint)
@@ -177,10 +180,10 @@ class ShapeOptGroup(om.Group):
                          +self.cpsurf_iga_name_list[i])
 
             # For constraints
-            self.connect(self.inputs_comp_name+'.'
-                         +self.cpffd_name_list[i],
-                         self.cpffd_align_comp_name +'.'
-                         +self.cpffd_name_list[i])
+            # self.connect(self.inputs_comp_name+'.'
+            #              +self.cpffd_name_list[i],
+            #              self.cpffd_align_comp_name +'.'
+            #              +self.cpffd_name_list[i])
             self.connect(self.inputs_comp_name+'.'
                          +self.cpffd_name_list[i],
                          self.cpffd_pin_comp_name+'.'
@@ -197,11 +200,11 @@ class ShapeOptGroup(om.Group):
         for i, field in enumerate(self.opt_field):
             self.add_design_var(self.inputs_comp_name+'.'
                                 +self.cpffd_name_list[i],
-                                lower=self.design_var_lower,
-                                upper=self.design_var_upper)
-            self.add_constraint(self.cpffd_align_comp_name+'.'
-                                +self.cpffd_align_name_list[i],
-                                equals=self.cpffd_align_cons_val[i])
+                                lower=self.design_var_lims[i][0],
+                                upper=self.design_var_lims[i][1])
+            # self.add_constraint(self.cpffd_align_comp_name+'.'
+            #                     +self.cpffd_align_name_list[i],
+            #                     equals=self.cpffd_align_cons_val[i])
             self.add_constraint(self.cpffd_pin_comp_name+'.'
                                 +self.cpffd_pin_name_list[i],
                                 equals=self.cpffd_pin_cons_val[i])
@@ -211,35 +214,25 @@ class ShapeOptGroup(om.Group):
         self.add_constraint(self.volume_comp_name+'.'
                             +self.volume_name,
                             equals=self.vol_val)
+                            # upper=1.1*self.vol_val,
+                            # lower=0.9*self.vol_val)
         # Use scaler 1e10 for SNOPT optimizer, 1e8 for SLSQP
         self.add_objective(self.int_energy_comp_name+'.'
                            +self.int_energy_name,
                            scaler=1e6)
 
 
-class SplineBC(object):
+def clampedBC(spline_generator, side=0, direction=0):
     """
-    Setting Dirichlet boundary condition to tIGAr spline generator.
+    Apply clamped boundary condition to spline.
     """
-    def __init__(self, directions=[0,1], sides=[[0,1],[0,1]], 
-                 fields=[[[0,1,2],[0,1,2]],[[0,1,2],[0,1,2]]],
-                 n_layers=[[1,1],[1,1]]):
-        self.fields = fields
-        self.directions = directions
-        self.sides = sides
-        self.n_layers = n_layers
+    for field in [0,1,2]:
+        scalar_spline = spline_generator.getScalarSpline(field)
+        side_dofs = scalar_spline.getSideDofs(direction, side, nLayers=2)
+        spline_generator.addZeroDofs(field, side_dofs)
 
-    def set_bc(self, spline_generator):
-        for direction in self.directions:
-            for side in self.sides[direction]:
-                for field in self.fields[direction][side]:
-                    scalar_spline = spline_generator.getScalarSpline(field)
-                    side_dofs = scalar_spline.getSideDofs(direction,
-                                side, nLayers=self.n_layers[direction][side])
-                    spline_generator.addZeroDofs(field, side_dofs)
-
-def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3, 
-                           spline_bc=None, index=0):
+def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4, 
+                           setBCs=None, side=0, direction=0, index=0):
     """
     Generate ExtractedBSpline from OCC B-spline surface.
     """
@@ -248,102 +241,223 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3,
     # spline = ExtractedSpline(DIR, quad_deg)
     spline_mesh = NURBSControlMesh4OCC(surface, useRect=False)
     spline_generator = EqualOrderSpline(worldcomm, num_field, spline_mesh)
-    if spline_bc is not None:
-        spline_bc.set_bc(spline_generator)
+    if setBCs is not None:
+        setBCs(spline_generator, side, direction)
     # spline_generator.writeExtraction(DIR)
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-optimizer = 'SLSQP'
-# optimizer = 'SNOPT'
-opt_field = [0]
-ffd_block_num_el = [3,1,2]
-p_ffd = 3
-save_path = './'
-folder_name = "results/"
+test_ind = 1
+# optimizer = 'SLSQP'
+optimizer = 'SNOPT'
+opt_field = [2]
+ffd_block_num_el = [4,8,2]
+# save_path = './'
+save_path = '/home/han/Documents/test_results/'
+# folder_name = "results/"
+folder_name = "results"+str(test_ind)+"/"
 
-filename_igs = "./geometry/init_Tbeam_geom_moved.igs"
-igs_shapes = read_igs_file(filename_igs, as_compound=False)
-occ_surf_list = [topoface2surface(face, BSpline=True) 
-                 for face in igs_shapes]
-occ_surf_data_list = [BSplineSurfaceData(surf) for surf in occ_surf_list]
-num_surfs = len(occ_surf_list)
-p = occ_surf_data_list[0].degree[0]
+# Define parameters
+# Scale down the geometry using ``geom_scale``to make the length 
+# of the wing in the span-wise direction is around 11 m 
+# (original length 4.54e5).
+geom_scale = 2.54e-5  # Convert current length unit to m
+E = Constant(68e9)  # Young's modulus, Pa
+nu = Constant(0.35)  # Poisson's ratio
+h_th = Constant(3.0e-3)  # Thickness of surfaces, m
 
-# Define material and geometric parameters
-E = Constant(1.0e12)
-nu = Constant(0.)
-h_th = Constant(0.1)
+p = 3  # spline order
 penalty_coefficient = 1.0e3
-pressure = Constant(1.)
 
-fields0 = [None, [[0,1,2]],]
-spline_bc0 = SplineBC(directions=[1], sides=[None, [0]],
-                      fields=fields0, n_layers=[None, [1]])
-spline_bcs = [spline_bc0,]*2
+print("Importing geometry...")
+filename_igs = "./geometry/pegasus_wing.iges"
+igs_shapes = read_igs_file(filename_igs, as_compound=False)
+pegasus_surfaces = [topoface2surface(face, BSpline=True) 
+                  for face in igs_shapes]
+
+# Upper skins: 0, 4, 8, 12, ..., 64
+# Lower skins: 1, 5, 9, 13, ..., 65
+# Front spars: 2, 6, 19, 14, ..., 66
+# Rear spars: 3, 7, 11, 15, ..., 67
+# Ribs: 72, 73, 74, ..., 85 (18 ribs)
+num_secs = 18 # Max 18
+# wing_indices = list(range(0,8)) + list(range(72,74)) # First two sections
+# wing_indices = list(range(0,12)) + list(range(72,75)) # First three sections
+wing_indices = list(range(0,num_secs*4)) + list(range(72,72+num_secs))
+# wing_indices = list(range(0,len(pegasus_surfaces))) # All surfaces
+wing_surfaces = [pegasus_surfaces[i] for i in wing_indices]
+num_surfs = len(wing_surfaces)
+if mpirank == 0:
+    print("Number of surfaces:", num_surfs)
+
+# # Save original surfaces
+# from PENGoLINS.igakit_utils import *
+# from igakit.io import VTK
+# ik_surfs = []
+# for i in range(num_surfs):
+#     ik_surf = BSpline_surface2ikNURBS(wing_surfaces[i])
+#     ik_surfs += [ik_surf]
+#     VTK().write("./geometry/wing_init_surf_"+str(i)+".vtk", ik_surf)
+# exit()
+
+num_pts_eval = [6]*num_surfs
+ref_level_list = [1]*num_surfs
+
+u_insert_list = [4]*num_surfs
+v_insert_list = [2]*num_surfs
+
+u_num_insert = []
+v_num_insert = []
+for i in range(len(u_insert_list)):
+    u_num_insert += [ref_level_list[i]*u_insert_list[i]]
+    v_num_insert += [ref_level_list[i]*v_insert_list[i]]
 
 # Geometry preprocessing and surface-surface intersections computation
-preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
-                                refine=False)
-print("Computing intersections...")
-preprocessor.compute_intersections(mortar_refine=2)
+preprocessor = OCCPreprocessing(wing_surfaces, reparametrize=True, 
+                                refine=True)
+preprocessor.reparametrize_BSpline_surfaces(num_pts_eval, num_pts_eval,
+                                            geom_scale=geom_scale,
+                                            remove_dense_knots=True,
+                                            rtol=1e-4)
+preprocessor.refine_BSpline_surfaces(p, p, u_num_insert, v_num_insert, 
+                                     correct_element_shape=True)
+
+# write_geom_file(preprocessor.BSpline_surfs_refine, "pegasus_wing_geom.igs")
+# exit()
+
+if mpirank == 0:
+    print("Computing intersections...")
+int_data_filename = "pegasus_wing_int_data"+str(test_ind)+".npz"
+if os.path.isfile(int_data_filename):
+    preprocessor.load_intersections_data(int_data_filename)
+else:
+    preprocessor.compute_intersections(rtol=1e-6, mortar_refine=2, 
+                                       edge_rel_ratio=1e-3)
+    preprocessor.save_intersections_data(int_data_filename)
 
 if mpirank == 0:
     print("Total DoFs:", preprocessor.total_DoFs)
     print("Number of intersections:", preprocessor.num_intersections_all)
+
+# # Display B-spline surfaces and intersections using 
+# # PythonOCC build-in 3D viewer.
+# display, start_display, add_menu, add_function_to_menu = init_display()
+# preprocessor.display_surfaces(display, save_fig=False)
+# preprocessor.display_intersections(display, save_fig=False)
 
 if mpirank == 0:
     print("Creating splines...")
 # Create tIGAr extracted spline instances
 splines = []
 for i in range(num_surfs):
-        spline = OCCBSpline2tIGArSpline(preprocessor.BSpline_surfs[i], 
-                                        spline_bc=spline_bcs[i], index=i)
+    if i in [0, 1, 2, 3]:
+        # Apply clamped BC to surfaces near root
+        spline = OCCBSpline2tIGArSpline(
+                 preprocessor.BSpline_surfs_refine[i], 
+                 setBCs=clampedBC, side=0, direction=1, index=i)
+        splines += [spline,]
+    else:
+        spline = OCCBSpline2tIGArSpline(
+                 preprocessor.BSpline_surfs_refine[i], index=i)
         splines += [spline,]
 
+# h_th = []
+# for i in range(num_surfs):
+#     h_th += [Function(splines[i].V_linear)]
+#     h_th[i].interpolate(Constant(3.0e-3))
+
+h_th = Constant(3.0e-3)
+
 # Create non-matching problem
-nonmatching_opt_ffd = NonMatchingOptFFD(splines, E, h_th, nu, 
-                                        opt_field=opt_field, comm=worldcomm)
+nonmatching_opt_ffd = NonMatchingOptFFD(splines, E, h_th, nu, opt_shape=True,
+                                 opt_field=opt_field, 
+                                 opt_thickness=False, comm=worldcomm)
 nonmatching_opt_ffd.create_mortar_meshes(preprocessor.mortar_nels)
+
+# print(aaa)
 
 if mpirank == 0:
     print("Setting up mortar meshes...")
+
 nonmatching_opt_ffd.mortar_meshes_setup(preprocessor.mapping_list, 
-                    preprocessor.intersections_para_coords, 
-                    penalty_coefficient)
-pressure = -Constant(1.)
-f = as_vector([Constant(0.), Constant(0.), pressure])
+                                    preprocessor.intersections_para_coords, 
+                                    penalty_coefficient)
+
+# # Define magnitude of load
+# pressure = Constant(-10) # The load should be in the unit of N/m^2
+# f0 = as_vector([Constant(0.), Constant(0.), Constant(0.)])
+
+# loads_inds = []
+# for i in range(num_secs):
+#     loads_inds += [i*4]
+#     loads_inds += [i*4+1]
+#     loads_inds += [i*4+2]
+#     loads_inds += [i*4+3]
+
+# source_terms = []
+# residuals = []
+# for s_ind in range(nonmatching_opt_ffd.num_splines):
+#     if s_ind in loads_inds:
+#         X = nonmatching_opt_ffd.splines[s_ind].F
+#         x = X + nonmatching_opt_ffd.splines[s_ind].rationalize(
+#                 nonmatching_opt_ffd.spline_funcs[s_ind])
+#         z = nonmatching_opt_ffd.splines[s_ind].rationalize(
+#             nonmatching_opt_ffd.spline_test_funcs[s_ind])
+#         A0,A1,A2,deriv_A2,A,B = surfaceGeometry(
+#                                 nonmatching_opt_ffd.splines[s_ind], X)
+#         a0,a1,a2,deriv_a2,a,b = surfaceGeometry(
+#                                 nonmatching_opt_ffd.splines[s_ind], x)
+#         pressure_dir = sqrt(det(a)/det(A))*a2        
+#         normal_pressure = pressure*pressure_dir
+#         source_terms += [inner(normal_pressure, z)\
+#                          *nonmatching_opt_ffd.splines[s_ind].dx]
+#         residuals += [SVK_residual(nonmatching_opt_ffd.splines[s_ind], 
+#                       nonmatching_opt_ffd.spline_funcs[s_ind], 
+#                       nonmatching_opt_ffd.spline_test_funcs[s_ind], 
+#                       E, nu, h_th, source_terms[s_ind])]
+#     else:
+#         z = nonmatching_opt_ffd.splines[s_ind].rationalize(
+#             nonmatching_opt_ffd.spline_test_funcs[s_ind])
+#         source_terms += [inner(f0, z)*nonmatching_opt_ffd.splines[s_ind].dx]
+#         residuals += [SVK_residual(nonmatching_opt_ffd.splines[s_ind], 
+#                       nonmatching_opt_ffd.spline_funcs[s_ind], 
+#                       nonmatching_opt_ffd.spline_test_funcs[s_ind], 
+#                       E, nu, h_th, source_terms[s_ind])]
+# nonmatching_opt_ffd.set_residuals(residuals)
+
+# Distributed downward load
+pressure = Constant(-10)
+f1 = as_vector([Constant(0.), Constant(0.), pressure])
+loads = [f1]*num_surfs
 source_terms = []
 residuals = []
-for s_ind in range(nonmatching_opt_ffd.num_splines):
-    z = nonmatching_opt_ffd.splines[s_ind].rationalize(
-        nonmatching_opt_ffd.spline_test_funcs[s_ind])
-    source_terms += [inner(f, z)*nonmatching_opt_ffd.splines[s_ind].dx]
-    residuals += [SVK_residual(nonmatching_opt_ffd.splines[s_ind], 
-                  nonmatching_opt_ffd.spline_funcs[s_ind], 
-                  nonmatching_opt_ffd.spline_test_funcs[s_ind], 
-                  E, nu, h_th, source_terms[s_ind])]
+for i in range(num_surfs):
+    source_terms += [inner(loads[i], nonmatching_opt_ffd.splines[i].rationalize(
+        nonmatching_opt_ffd.spline_test_funcs[i]))*nonmatching_opt_ffd.splines[i].dx]
+    residuals += [SVK_residual(nonmatching_opt_ffd.splines[i], nonmatching_opt_ffd.spline_funcs[i], 
+        nonmatching_opt_ffd.spline_test_funcs[i], E, nu, h_th, source_terms[i])]
 nonmatching_opt_ffd.set_residuals(residuals)
 
 # Create FFD block in igakit format
 cp_ffd_lims = nonmatching_opt_ffd.cpsurf_lims
-FFD_block = create_3D_block(ffd_block_num_el, p_ffd, cp_ffd_lims)
+for field in [2]:
+    cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
+    cp_ffd_lims[field][1] = cp_ffd_lims[field][1] + 0.1*cp_range
+    cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.1*cp_range
+FFD_block = create_3D_block(ffd_block_num_el, p, cp_ffd_lims)
 
 # Set FFD to non-matching optimization instance
-nonmatching_opt_ffd.set_shopt_FFD(FFD_block.knots, FFD_block.control)
-# Set constraint info
-nonmatching_opt_ffd.set_shopt_align_CPFFD(shopt_align_dir=[1])
-nonmatching_opt_ffd.set_shopt_pin_CPFFD(pin_dir0=0, pin_side0=[0,1],
-                                        pin_dir1=1, pin_side1=[0])
-nonmatching_opt_ffd.set_shopt_regu_CPFFD(shopt_regu_dir=[None], 
-                                         shopt_regu_side=[None],
-                                         shopt_regu_align=[1])
+nonmatching_opt_ffd.set_FFD(FFD_block.knots, FFD_block.control)
+# nonmatching_opt_ffd.set_align_CPFFD(align_dir=[1])
+nonmatching_opt_ffd.set_pin_CPFFD(pin_dir0=1, pin_side0=[0],
+                                  pin_dir1=2, pin_side1=[0])
+nonmatching_opt_ffd.set_regu_CPFFD(regu_dir=[None], regu_side=[None])
 
 # Set up optimization
 nonmatching_opt_ffd.create_files(save_path=save_path, 
-                                 folder_name=folder_name,) 
+                                 folder_name=folder_name)
 model = ShapeOptGroup(nonmatching_opt_ffd=nonmatching_opt_ffd)
-model.init_parameters()
+model.init_parameters(design_var_lims=[[cp_ffd_lims[2][0]/2, cp_ffd_lims[2][1]*2]])
 prob = om.Problem(model=model)
 
 if optimizer.upper() == 'SNOPT':
@@ -351,63 +465,41 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.options['optimizer'] = 'SNOPT'
     prob.driver.opt_settings['Minor feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
-    prob.driver.opt_settings['Major optimality tolerance'] = 1e-5
+    prob.driver.opt_settings['Major optimality tolerance'] = 1e-4
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
-    prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
+    prob.driver.opt_settings['Summary file'] = './SNOPT_report/SNOPT_summary'+str(test_ind)+'.out'
+    prob.driver.opt_settings['Print file'] = './SNOPT_report/SNOPT_print'+str(test_ind)+'.out'
     prob.driver.options['debug_print'] = ['objs']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
-    prob.driver.options['tol'] = 1e-15
+    prob.driver.options['tol'] = 1e-8
     prob.driver.options['disp'] = True
     prob.driver.options['debug_print'] = ['objs']
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-# Create a recorder variable
-recorder_name = './recorder.sql'
-FFD_data_name = './FFD_data.npz'
-
-prob.driver.recording_options['includes'] = ['*']
-prob.driver.recording_options['record_objectives'] = True
-prob.driver.recording_options['record_derivatives'] = True
-prob.driver.recording_options['record_constraints'] = True
-prob.driver.recording_options['record_desvars'] = True
-prob.driver.recording_options['record_inputs'] = True
-prob.driver.recording_options['record_outputs'] = True
-prob.driver.recording_options['record_residuals'] = True
-
-recorder = om.SqliteRecorder(recorder_name)
-prob.driver.add_recorder(recorder)
-
 prob.setup()
-# prob.set_solver_print(0)
 prob.run_driver()
 
-major_iter_inds = model.disp_states_comp.func_eval_major_ind
-np.savez(FFD_data_name, opt_field=opt_field,
-                        major_iter_ind=major_iter_inds,
-                        ffd_control=FFD_block.control,
-                        ffd_knots=FFD_block.knots,
-                        QoI=0)
-# for i in range(num_surfs):
-#     max_F0 = np.max(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
-#     min_F0 = np.min(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
-#     print("Spline: {:2d}, Max F0: {:8.6f}".format(i, max_F0))
-#     print("Spline: {:2d}, Min F0: {:8.6f}".format(i, min_F0))
+# if mpirank == 0:
+#     print("Maximum F2: {:8.6f}".
+#           format(np.max(nonmatching_opt_ffd.splines[0].cpFuncs[2]
+#                  .vector().get_local())))
+#     print("Miminum F2: {:8.6f}".
+#           format(np.min(nonmatching_opt_ffd.splines[1].cpFuncs[2]
+#                  .vector().get_local())))
 
-xi0_coord = np.linspace(0.,1.,101)
-xi1_coord = 1
-x_coord = np.zeros(101)
-for i in range(101):
-    x_coord[i] = nonmatching_opt_ffd.splines[1].cpFuncs[0](
-                                     [xi0_coord[i], xi1_coord])
-
-import matplotlib.pyplot as plt
-plt.figure()
-plt.plot(x_coord, xi0_coord)
-plt.xlim([-1,1])
-plt.show()
+#### Save final shape of FFD block
+VTK().write("./geometry/FFD_block_initial"+str(test_ind)+".vtk", FFD_block)
+init_CP_FFD = FFD_block.control[:,:,:,0:3].transpose(2,1,0,3).reshape(-1,3)
+final_CP_FFD = init_CP_FFD.copy()
+final_FFD_CP1 = prob[model.inputs_comp_name+'.'+model.cpffd_name_list[0]]
+final_CP_FFD[:,opt_field[0]] = final_FFD_CP1
+final_CP_FFD = final_CP_FFD.reshape(FFD_block.control[:,:,:,0:3]\
+               .transpose(2,1,0,3).shape)
+final_CP_FFD = final_CP_FFD.transpose(2,1,0,3)
+final_FFD_block = NURBS(FFD_block.knots, final_CP_FFD)
+VTK().write('./geometry/FFD_block_final'+str(test_ind)+'.vtk', final_FFD_block)

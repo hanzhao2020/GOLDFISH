@@ -1,4 +1,5 @@
 from GOLDFISH.nonmatching_opt_ffd import *
+# from operations.int_energy_regu_exop import *
 from int_energy_regu_exop import *
 
 import openmdao.api as om
@@ -12,7 +13,6 @@ class IntEnergyReguComp(om.ExplicitComponent):
         self.options.declare('input_h_th_name', default='thickness')
         self.options.declare('input_u_name', default='displacements')
         self.options.declare('output_wint_name', default='w_int')
-        self.options.declare('regu_para', default=1e-1)
 
     def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
@@ -20,9 +20,8 @@ class IntEnergyReguComp(om.ExplicitComponent):
         self.input_h_th_name = self.options['input_h_th_name']
         self.input_u_name = self.options['input_u_name']
         self.output_wint_name = self.options['output_wint_name']
-        self.regu_para = self.options['regu_para']
 
-        self.wint_exop = IntEnergyReguExOperation(self.nonmatching_opt, self.regu_para)
+        self.wint_exop = IntEnergyReguExOperation(self.nonmatching_opt)
 
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape

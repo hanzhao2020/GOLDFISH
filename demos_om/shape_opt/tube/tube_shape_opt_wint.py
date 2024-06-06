@@ -22,7 +22,7 @@ class ShapeOptGroup(om.Group):
         self.options.declare('cpffd_pin_name_pre', default='CP_FFD_pin')
         self.options.declare('cpffd_regu_name_pre', default='CP_FFD_regu')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.cpffd_name_pre = self.options['cpffd_name_pre']
         self.cpsurf_fe_name_pre = self.options['cpsurf_fe_name_pre']
@@ -77,7 +77,7 @@ class ShapeOptGroup(om.Group):
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_cpffd_name_pre=self.cpffd_name_pre,
                         output_cpsurf_name_pre=self.cpsurf_fe_name_pre)
-        self.ffd2surf_comp.init_paramters()
+        self.ffd2surf_comp.init_parameters()
         self.add_subsystem(self.ffd2surf_comp_name, self.ffd2surf_comp)
 
         # Add CPFE2IGA comp
@@ -85,7 +85,7 @@ class ShapeOptGroup(om.Group):
                         nonmatching_opt=self.nonmatching_opt_ffd,
                         input_cp_fe_name_pre=self.cpsurf_fe_name_pre,
                         output_cp_iga_name_pre=self.cpsurf_iga_name_pre)
-        self.cpfe2iga_comp.init_paramters()
+        self.cpfe2iga_comp.init_parameters()
         self.add_subsystem(self.cpfe2iga_comp_name, self.cpfe2iga_comp)
 
         # Add disp_states_comp
@@ -93,7 +93,7 @@ class ShapeOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                            output_u_name=self.disp_name)
-        self.disp_states_comp.init_paramters(save_files=True)
+        self.disp_states_comp.init_parameters(save_files=True)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
         # Add internal energy comp (objective function)
@@ -102,7 +102,7 @@ class ShapeOptGroup(om.Group):
                           input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                           input_u_name=self.disp_name,
                           output_wint_name=self.int_energy_name)
-        self.int_energy_comp.init_paramters()
+        self.int_energy_comp.init_parameters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
         # Add CP FFD align comp (linear constraint)
@@ -111,7 +111,7 @@ class ShapeOptGroup(om.Group):
                            # align_dir=self.cpffd_align_dir,
                            input_cpffd_name_pre=self.cpffd_name_pre,
                            output_cpalign_name_pre=self.cpffd_align_name_pre)
-        self.cpffd_align_comp.init_paramters()
+        self.cpffd_align_comp.init_parameters()
         self.add_subsystem(self.cpffd_align_comp_name, self.cpffd_align_comp)
         self.cpffd_align_cons_val = np.zeros(self.cpffd_align_comp.output_shape)
 
@@ -120,7 +120,7 @@ class ShapeOptGroup(om.Group):
                          nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                          input_cpffd_name_pre=self.cpffd_name_pre,
                          output_cppin_name_pre=self.cpffd_pin_name_pre)
-        self.cpffd_pin_comp.init_paramters()
+        self.cpffd_pin_comp.init_parameters()
         self.add_subsystem(self.cpffd_pin_comp_name, self.cpffd_pin_comp)
         self.cpffd_pin_cons_val = []
         self.cpffd_pin_cons_val += [self.nonmatching_opt_ffd.shopt_cpffd_flat[:,0]\
@@ -132,7 +132,7 @@ class ShapeOptGroup(om.Group):
                            nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                            input_cpffd_name_pre=self.cpffd_name_pre,
                            output_cpregu_name_pre=self.cpffd_regu_name_pre)
-        self.cpffd_regu_comp.init_paramters()
+        self.cpffd_regu_comp.init_parameters()
         self.add_subsystem(self.cpffd_regu_comp_name, self.cpffd_regu_comp)
         self.cpffd_regu_lower = [np.ones(self.cpffd_regu_comp.\
                                  output_shapes[i])*1.e-1
@@ -342,7 +342,7 @@ nonmatching_opt_ffd.create_files(save_path=save_path,
                                  folder_name=folder_name, 
                                  refine_mesh=True, ref_nel=64)
 model = ShapeOptGroup(nonmatching_opt_ffd=nonmatching_opt_ffd)
-model.init_paramters()
+model.init_parameters()
 prob = om.Problem(model=model)
 
 if optimizer.upper() == 'SNOPT':
@@ -366,21 +366,21 @@ elif optimizer.upper() == 'SLSQP':
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-# # Create a recorder variable
-# recorder_name = './opt_data/recorder.sql'
-# FFD_data_name = './opt_data/FFD_data.npz'
+# Create a recorder variable
+recorder_name = './opt_data/recorder.sql'
+FFD_data_name = './opt_data/FFD_data.npz'
 
-# prob.driver.recording_options['includes'] = ['*']
-# prob.driver.recording_options['record_objectives'] = True
-# prob.driver.recording_options['record_derivatives'] = True
-# prob.driver.recording_options['record_constraints'] = True
-# prob.driver.recording_options['record_desvars'] = True
-# prob.driver.recording_options['record_inputs'] = True
-# prob.driver.recording_options['record_outputs'] = True
-# prob.driver.recording_options['record_residuals'] = True
+prob.driver.recording_options['includes'] = ['*']
+prob.driver.recording_options['record_objectives'] = True
+prob.driver.recording_options['record_derivatives'] = True
+prob.driver.recording_options['record_constraints'] = True
+prob.driver.recording_options['record_desvars'] = True
+prob.driver.recording_options['record_inputs'] = True
+prob.driver.recording_options['record_outputs'] = True
+prob.driver.recording_options['record_residuals'] = True
 
-# recorder = om.SqliteRecorder(recorder_name)
-# prob.driver.add_recorder(recorder)
+recorder = om.SqliteRecorder(recorder_name)
+prob.driver.add_recorder(recorder)
 
 prob.setup()
 # prob.set_solver_print(0)
@@ -394,9 +394,9 @@ if mpirank == 0:
     print("Maximum F0: {:8.6f}".format(max_F0))
     print("Maximum F1: {:8.6f}".format(max_F1))
 
-# major_iter_inds = model.disp_states_comp.func_eval_major_ind
-# np.savez(FFD_data_name, opt_field=opt_field,
-#                         major_iter_ind=major_iter_inds,
-#                         ffd_control=FFD_block.control,
-#                         ffd_knots=FFD_block.knots,
-#                         QoI=np.array([max_F0, max_F1]))
+major_iter_inds = model.disp_states_comp.func_eval_major_ind
+np.savez(FFD_data_name, opt_field=opt_field,
+                        major_iter_ind=major_iter_inds,
+                        ffd_control=FFD_block.control,
+                        ffd_knots=FFD_block.knots,
+                        QoI=np.array([max_F0, max_F1]))
