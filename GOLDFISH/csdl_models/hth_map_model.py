@@ -16,7 +16,7 @@ class HthMapModel(Model):
         self.parameters.declare('input_h_th_name_design', default='thickness')
         self.parameters.declare('output_h_th_name_full', default='thickness_full')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.order = self.parameters['order']
         self.input_h_th_name_design = self.parameters['input_h_th_name_design']
@@ -28,7 +28,7 @@ class HthMapModel(Model):
                   order=self.order, 
                   input_h_th_name_design=self.input_h_th_name_design,
                   output_h_th_name_full=self.output_h_th_name_full)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         h_th = self.declare_variable(self.op.input_h_th_name_design,
@@ -46,7 +46,7 @@ class HthMapOperation(CustomExplicitOperation):
         self.parameters.declare('input_h_th_name_design', default='thickness')
         self.parameters.declare('output_h_th_name_full', default='thickness_full')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.order = self.parameters['order']
         self.input_h_th_name_design = self.parameters['input_h_th_name_design']
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     m = HthMapModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

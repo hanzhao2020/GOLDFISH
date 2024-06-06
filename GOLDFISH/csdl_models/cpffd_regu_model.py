@@ -13,7 +13,7 @@ class CPFFDReguModel(Model):
         self.parameters.declare('output_cpregu_name_pre', 
                                 default='CP_FFD_regu')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cpregu_name_pre = \
@@ -22,7 +22,7 @@ class CPFFDReguModel(Model):
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_cpffd_name_pre=self.input_cpffd_name_pre,
                         output_cpregu_name_pre=self.output_cpregu_name_pre)
-        self.op.init_paramters()
+        self.op.init_parameters()
         
     def define(self):
         cpffd_list = [None for i in range(len(self.op.opt_field))]
@@ -48,7 +48,7 @@ class CPFFDReguOperation(CustomExplicitOperation):
         self.parameters.declare('output_cpregu_name_pre', 
                                 default='CP_FFD_regu')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cpregu_name_pre = self.parameters['output_cpregu_name_pre']
@@ -102,7 +102,7 @@ if __name__ == "__main__":
                                          shopt_regu_side=[None, None, None])
 
     m = CPFFDReguModel(nonmatching_opt_ffd=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

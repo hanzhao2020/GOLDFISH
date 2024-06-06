@@ -15,7 +15,7 @@ class HthFFD2FEModel(Model):
         self.parameters.declare('input_h_th_ffd_name', default='thickness_FFD')
         self.parameters.declare('output_h_th_fe_name', default='thickness_FE')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_h_th_ffd_name = self.parameters['input_h_th_ffd_name']
         self.output_h_th_fe_name = self.parameters['output_h_th_fe_name']
@@ -24,7 +24,7 @@ class HthFFD2FEModel(Model):
                   nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                   input_h_th_ffd_name=self.input_h_th_ffd_name,
                   output_h_th_fe_name=self.output_h_th_fe_name)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         h_th_ffd = self.declare_variable(self.op.input_h_th_ffd_name,
@@ -41,7 +41,7 @@ class HthFFD2FEOperation(CustomExplicitOperation):
         self.parameters.declare('input_h_th_ffd_name', default='thickness_FFD')
         self.parameters.declare('output_h_th_fe_name', default='thickness_FE')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_h_th_ffd_name = self.parameters['input_h_th_ffd_name']
         self.output_h_th_fe_name = self.parameters['output_h_th_fe_name']
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     # m = HthFFD2FEModel(nonmatching_opt=nonmatching_opt)
-    # m.init_paramters()
+    # m.init_parameters()
     # sim = Simulator(m)
     # sim.run()
     # sim.check_partials(compact_print=True)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     a0 = nonmatching_opt.set_thopt_align_CP_multiFFD([[2],[0]])
 
     m = HthFFD2FEModel(nonmatching_opt_ffd=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

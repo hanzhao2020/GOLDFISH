@@ -13,7 +13,7 @@ class HthFFDAlignModel(Model):
         self.parameters.declare('output_h_th_align_name', 
                                 default='thickness_FFD_align')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_h_th_name = self.parameters['input_h_th_name']
         self.output_h_th_align_name = self.parameters['output_h_th_align_name']
@@ -22,7 +22,7 @@ class HthFFDAlignModel(Model):
                   nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                   input_h_th_name=self.input_h_th_name,
                   output_h_th_align_name=self.output_h_th_align_name)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         h_th_ffd = self.declare_variable(self.op.input_h_th_name,
@@ -40,7 +40,7 @@ class HthFFDAlignOperation(CustomExplicitOperation):
         self.parameters.declare('output_h_th_align_name', 
                                 default='thickness_FFD_align')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_h_th_name = self.parameters['input_h_th_name']
         self.output_h_th_align_name = self.parameters['output_h_th_align_name']
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     nonmatching_opt.set_thopt_align_CPFFD(thopt_align_dir=1)
 
     m = HthFFDAlignModel(nonmatching_opt_ffd=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

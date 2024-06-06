@@ -12,7 +12,7 @@ class CPFE2IGAModel(Model):
         self.parameters.declare('input_cp_fe_name_pre', default='CP_FE')
         self.parameters.declare('output_cp_iga_name_pre', default='CP_IGA')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_fe_name_pre = self.parameters['input_cp_fe_name_pre']
         self.output_cp_iga_name_pre = self.parameters['output_cp_iga_name_pre']
@@ -20,7 +20,7 @@ class CPFE2IGAModel(Model):
                         nonmatching_opt=self.nonmatching_opt,
                         input_cp_fe_name_pre=self.input_cp_fe_name_pre,
                         output_cp_iga_name_pre=self.output_cp_iga_name_pre)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         cp_fe_list = [None for i in range(len(self.op.opt_field))]
@@ -49,7 +49,7 @@ class CPFE2IGAOperation(CustomImplicitOperation):
         self.parameters.declare('input_cp_fe_name_pre', default='CP_FE')
         self.parameters.declare('output_cp_iga_name_pre', default='CP_IGA')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_fe_name_pre = self.parameters['input_cp_fe_name_pre']
         self.output_cp_iga_name_pre = self.parameters['output_cp_iga_name_pre']
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     # nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
 
     m = CPFE2IGAModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     print("Check partials:")
