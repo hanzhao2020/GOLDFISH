@@ -1,7 +1,3 @@
-"""
-The compressed plate geometry can be downloaded from:
-    https://drive.google.com/file/d/1nyE15ww0_JRAnVU-lWKQGgS62AHJsJq3/view?usp=sharing
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 from igakit.cad import *
@@ -83,7 +79,7 @@ class VarThOptGroup(Model):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_h_th_name=self.h_th_iga_name,
                            output_u_name=self.disp_name)
-        self.disp_states_model.init_parameters(save_files=False)
+        self.disp_states_model.init_parameters(save_files=True)
         self.add(self.disp_states_model, 
                  name=self.disp_states_model_name, promotes=[])
 
@@ -209,12 +205,16 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
+
+test_ind = 22
 ftol=1e-7
 # optimizer = 'SLSQP'
 optimizer = 'SNOPT'
 
-save_path = './'
-folder_name = "results/"
+# save_path = './'
+save_path = '/home/han/Documents/test_results/'
+# save_path = '/Users/hanzhao/Documents/test_results/'
+folder_name = "results"+str(test_ind)+"/"
 
 p_ffd = 3
 ffd_block_num_el = [3,1,1]
@@ -222,10 +222,15 @@ ffd_block_num_el = [3,1,1]
 geom_scale = 1.  # Convert current length unit to m
 E = Constant(68e9)  # Young's modulus, Pa
 nu = Constant(0.35)  # Poisson's ratio
+# h_th_val = Constant(1.0e-2)  # Thickness of surfaces, m
+
+# p = test_ind  # spline order
 penalty_coefficient = 1.0e3
 
 print("Importing geometry...")
-filename_igs = "./geometry/plate_geometry.igs"
+# filename_igs = "./geometry/plate_geometry_quadratic.igs"
+filename_igs = "./geometry/plate_geometry_cubic.igs"
+# filename_igs = "./geometry/plate_geometry_quartic.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
 plate_surfaces = [topoface2surface(face, BSpline=True) 
                   for face in igs_shapes]
@@ -274,6 +279,17 @@ nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, opt_shape=False,
                                  opt_thickness=True, var_thickness=True, 
                                  comm=worldcomm)
 
+# # Save initial discretized geometry
+# nonmatching_opt.create_files(save_path=save_path, 
+#                                  folder_name='results_temp/', 
+#                                  refine_mesh=False)
+# nonmatching_opt.save_files()
+# # Save intersection curves
+# for i in range(preprocessor.num_intersections_all):
+#     mesh_phy = generate_mortar_mesh(preprocessor.intersections_phy_coords[i], num_el=128)
+#     File('./geometry/int_curve'+str(i)+'.pvd') << mesh_phy
+# exit()
+
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
 
 if mpirank == 0:
@@ -282,6 +298,23 @@ if mpirank == 0:
 nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
                             preprocessor.intersections_para_coords, 
                             penalty_coefficient)
+
+# # Define magnitude of load
+# load = Constant(-100) # The load should be in the unit of N/m^3
+# f1 = as_vector([Constant(0.0), Constant(0.0), load])
+
+# # Distributed downward load
+# loads = [f1]*num_surfs
+# source_terms = []
+# residuals = []
+# for i in range(num_surfs):
+#     source_terms += [inner(loads[i], nonmatching_opt.splines[i].rationalize(
+#         nonmatching_opt.spline_test_funcs[i]))*nonmatching_opt.splines[i].dx]
+#     residuals += [SVK_residual(nonmatching_opt.splines[i], 
+#                                nonmatching_opt.spline_funcs[i], 
+#                                nonmatching_opt.spline_test_funcs[i], 
+#                                E, nu, h_th[i], source_terms[i])]
+# nonmatching_opt.set_residuals(residuals)
 
 # Define magnitude of load
 load = Constant(-1) # The load should be in the unit of N/m^3
@@ -293,7 +326,8 @@ bdry1 = conditional(gt(xi_end[0],1.-1e-3), Constant(1.), Constant(0.))
 
 f_list = [f0]*(num_surfs-1) + [f1*bdry1]
 
-# Line force
+# Line load
+# loads = [f1]*num_surfs
 source_terms = []
 residuals = []
 for i in range(num_surfs):
@@ -305,6 +339,9 @@ for i in range(num_surfs):
                                E, nu, h_th[i], source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
 
+# nonmatching_opt.solve_nonlinear_nonmatching_problem()
+# print("*"*50)
+
 # Create FFD block in igakit format
 cp_ffd_lims = nonmatching_opt.cpsurf_lims
 for field in [2]:
@@ -312,10 +349,19 @@ for field in [2]:
     cp_ffd_lims[field][0] = -0.05
 FFD_block = create_3D_block(ffd_block_num_el, p_ffd, cp_ffd_lims)
 
+# VTK().write("./geometry/ffd_block_init.vtk", FFD_block)
+# vtk_writer = VTKWriter()
+# vtk_writer.write_cp("./geometry/ffd_cp_init.vtk", FFD_block)
+
 # Set FFD to non-matching optimization instance
 nonmatching_opt.set_thopt_FFD(FFD_block.knots, FFD_block.control)
 nonmatching_opt.set_thopt_align_CPFFD(thopt_align_dir=1)
 nonmatching_opt.set_thopt_regu_CPFFD([None], [None], None)
+
+# # Set constraint info
+# nonmatching_opt_ffd.set_pin_CPFFD(pin_dir0=2, pin_side0=[1],
+#                                   pin_dir1=1, pin_side1=[1])
+# nonmatching_opt_ffd.set_regu_CPFFD(regu_dir=[None], regu_side=[None])
 
 # Set up optimization
 nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
@@ -335,10 +381,10 @@ optimizer = SLSQP(prob, maxiter=1000, ftol=ftol)
 optimizer.solve()
 optimizer.print_results()
 
-# if mpirank == 0:
-#     for i in range(num_surfs):
-#         print("Thickness for patch {:2d}: {:10.6f}".format(i, 
-#               nonmatching_opt.h_th[i].vector().get_local()[0]))
+if mpirank == 0:
+    for i in range(num_surfs):
+        print("Thickness for patch {:2d}: {:10.6f}".format(i, 
+              nonmatching_opt.h_th[i].vector().get_local()[0]))
 
 h_th_profile = []
 num_pts = 101
@@ -376,14 +422,18 @@ th = array([1.        , 0.99533525, 0.99065238, 0.98594663, 0.9812117 ,
        0.26423203, 0.246017  , 0.22634664, 0.20480777, 0.18074422,
        0.15300365, 0.11920342, 0.07328464])
 
+
 th_norm = th/np.max(th)
 x_coord = np.linspace(0.,1.,len(th))
 
 import matplotlib.pyplot as plt
 plt.figure()
+# plt.plot(x0_array, h_th_profile, '--')
 plt.plot(x_coord, th_norm, '--', color='gray', label='Bernoulli beam')
 plt.plot(x_array, h_th_norm, '-', label='Kirchhoff–Love shell, y=0.5')
+# plt.plot(np.linspace(0,1,len(cp)), cp, '-*', label='Shell opt cp')
 plt.legend()
 plt.xlabel("x")
 plt.ylabel("Normalized thickness")
+plt.savefig("temp"+str(test_ind)+".png")
 plt.show()

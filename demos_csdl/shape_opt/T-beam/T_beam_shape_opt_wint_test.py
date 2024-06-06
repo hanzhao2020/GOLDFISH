@@ -1,7 +1,3 @@
-"""
-The compressed T-beam geometry can be downloaded from:
-    https://drive.google.com/file/d/1nE7eRklP8EEqTT2b5GbwNXeaBi02F3PN/view?usp=sharing
-"""
 import numpy as np
 import matplotlib.pyplot as plt
 from igakit.cad import *
@@ -255,11 +251,14 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
+test_ind = 16
 opt_field = [0]
 ffd_block_num_el = [2,1,1]
 p_ffd = 3
-save_path = './'
-folder_name = "results/"
+# save_path = './'
+save_path = '/home/han/Documents/test_results/'
+# folder_name = "results/"
+folder_name = "results"+str(test_ind)+"/"
 
 filename_igs = "./geometry/init_Tbeam_geom_moved.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
@@ -285,7 +284,12 @@ spline_bcs = [spline_bc0,]*2
 preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
                                 refine=False)
 print("Computing intersections...")
-preprocessor.compute_intersections(mortar_refine=2)
+int_data_filename = "int_data_moved.npz"
+if os.path.isfile(int_data_filename):
+    preprocessor.load_intersections_data(int_data_filename)
+else:
+    preprocessor.compute_intersections(mortar_refine=2)
+    preprocessor.save_intersections_data(int_data_filename)
 
 if mpirank == 0:
     print("Total DoFs:", preprocessor.total_DoFs)
@@ -310,6 +314,17 @@ for i in range(num_surfs):
 nonmatching_opt_ffd = NonMatchingOptFFD(splines, E, h_th, nu, 
                                         opt_field=opt_field, comm=worldcomm)
 
+# # Save initial discretized geometry
+# nonmatching_opt_ffd.create_files(save_path=save_path, 
+#                                  folder_name='results_temp/', 
+#                                  refine_mesh=False)
+# nonmatching_opt_ffd.save_files()
+# # Save intersection curves
+# for i in range(preprocessor.num_intersections_all):
+#     mesh_phy = generate_mortar_mesh(preprocessor.intersections_phy_coords[i], num_el=128)
+#     File('./geometry/int_curve'+str(i)+'.pvd') << mesh_phy
+# exit()
+
 nonmatching_opt_ffd.create_mortar_meshes(preprocessor.mortar_nels)
 
 if mpirank == 0:
@@ -333,6 +348,9 @@ nonmatching_opt_ffd.set_residuals(residuals)
 
 # Create FFD block in igakit format
 cp_ffd_lims = nonmatching_opt_ffd.cpsurf_lims
+# for field in [2]:
+#     cp_range = cp_ffd_lims[field][1] - cp_ffd_lims[field][0]
+#     cp_ffd_lims[field][0] = cp_ffd_lims[field][0] - 0.2*cp_range
 FFD_block = create_3D_block(ffd_block_num_el, p_ffd, cp_ffd_lims)
 
 # Set FFD to non-matching optimization instance
@@ -363,11 +381,11 @@ optimizer = SLSQP(prob, maxiter=1000, ftol=1e-12)
 optimizer.solve()
 optimizer.print_results()
 
-# for i in range(num_surfs):
-#     max_F0 = np.max(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
-#     min_F0 = np.min(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
-#     print("Spline: {:2d}, Max F0: {:8.6f}".format(i, max_F0))
-#     print("Spline: {:2d}, Min F0: {:8.6f}".format(i, min_F0))
+for i in range(num_surfs):
+    max_F0 = np.max(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
+    min_F0 = np.min(nonmatching_opt_ffd.splines[i].cpFuncs[0].vector().get_local())
+    print("Spline: {:2d}, Max F0: {:8.6f}".format(i, max_F0))
+    print("Spline: {:2d}, Min F0: {:8.6f}".format(i, min_F0))
 
 xi0_coord = np.linspace(0.,1.,101)
 xi1_coord = 1
