@@ -812,21 +812,22 @@ class CPSurfDesign2Analysis(object):
             self.init_analysis_cp[field_ind] = \
                 np.concatenate(self.analysis_cp_decate[field_ind])
 
+    ###############################################################
     def set_init_knots_by_field(self, p_list, knots_list):
         self.design_degree = p_list
         self.design_knots = knots_list
-        self.cp_coarse_sizes = [[] for field in self.opt_field]
-        self.cp_coarse_shapes = [[] for field in self.opt_field]
+        self.design_cp_sizes = [[] for field in self.opt_field]
+        self.design_cp_shapes = [[] for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
             for i, degree in enumerate(self.design_degree[field_ind]):
                 l = len(self.design_knots[field_ind][i][0])-degree[0]-1
                 m = len(self.design_knots[field_ind][i][1])-degree[1]-1
-                self.cp_coarse_sizes[field_ind] += [l*m]
-                self.cp_coarse_shapes[field_ind] += [[l,m]]
+                self.design_cp_sizes[field_ind] += [l*m]
+                self.design_cp_shapes[field_ind] += [[l,m]]
 
         # Constraint related properties
         self.align_dir_list = [None for field in self.opt_field]
-        self.cp_coarse_free_dofs = [np.arange(np.sum(self.cp_coarse_sizes[field_ind])) 
+        self.cp_coarse_free_dofs = [np.arange(np.sum(self.design_cp_sizes[field_ind])) 
                                 for field_ind in range(len(self.opt_field))]
         self.cp_coarse_free_dofs_decate = [[] for field in self.opt_field]
 
@@ -835,18 +836,18 @@ class CPSurfDesign2Analysis(object):
             ind_off = 0
             for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
                 self.cp_coarse_align_deriv_sub_list[field_ind] += \
-                    [np.eye(self.cp_coarse_sizes[field_ind][i])]
+                    [np.eye(self.design_cp_sizes[field_ind][i])]
                 self.cp_coarse_free_dofs_decate[field_ind] += \
-                    [np.arange(self.cp_coarse_sizes[field_ind][i])+ind_off]
-                ind_off += self.cp_coarse_sizes[field_ind][i]
+                    [np.arange(self.design_cp_sizes[field_ind][i])+ind_off]
+                ind_off += self.design_cp_sizes[field_ind][i]
 
         # self.cp_design2analysis_deriv_list = [None for field in self.opt_field]
         self.cp_coarse_align_deriv_list = [coo_matrix(block_diag(*mat_list)) 
                                            for mat_list in 
                                            self.cp_coarse_align_deriv_sub_list]
 
-        self.order_ele_operator_list = [None for field in self.opt_field]
-        self.knot_refine_operator_list = [None for field in self.opt_field]
+        # self.order_ele_operator_list = [None for field in self.opt_field]
+        # self.knot_refine_operator_list = [None for field in self.opt_field]
 
         self.cp_coarse_pin_field = []
         self.cp_coarse_regu_field = []
@@ -858,199 +859,394 @@ class CPSurfDesign2Analysis(object):
         self.cp_coarse_pin_dofs = [[] for field in self.opt_field]
         self.cp_coarse_pin_vals = [[] for field in self.opt_field]
 
-    def set_order_elevation_by_field(self, p_list, knots_list):
-        self.order_ele_degree = p_list
-        self.order_ele_knots = knots_list
-        # for field_ind, field in enumerate(self.opt_field):
-        #     for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-        #         local_ind = surf_inds.index(s_ind)
-        #         self.order_ele_degree[field_ind] += [p_list[local_ind]]
-        #         self.order_ele_knots[field_ind] += [knots_list[local_ind]]
-
+    def design2coarse_refinement_opt(self, degree=[3,3]):
+        self.d2c_order_ele_degree = [[] for field in self.opt_field]
+        self.d2c_order_ele_knots = [[] for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
-            order_ele_operator_list_temp = []
-            for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                order_ele_operator_list_temp += [
+            for i, s_ind in enumerate(self.shopt_surf_inds_explicit[field_ind]):
+                self.d2c_order_ele_degree[field_ind] += [degree]
+                design_knot = self.design_knots[field_ind][i]
+                design_degree = self.design_degree[field_ind][i]
+                p_diff0 = degree[0]-design_degree[0]
+                p_diff1 = degree[1]-design_degree[1]
+                order_ele_knot = [[0,]*p_diff0+design_knot[0]+[1,]*p_diff0,
+                                  [0,]*p_diff1+design_knot[1]+[1,]*p_diff1]
+                self.d2c_order_ele_knots[field_ind] += [order_ele_knot]
+
+        self.d2c_order_ele_operator_list = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            d2c_order_ele_operator_list_temp = []
+            for i, surf_ind in enumerate(self.shopt_surf_inds_explicit[field_ind]):
+                d2c_order_ele_operator_list_temp += [
                     surface_order_elevation_operator(
                     self.design_degree[field_ind][i], 
                     self.design_knots[field_ind][i], 
-                    self.order_ele_degree[field_ind][i], 
-                    self.order_ele_knots[field_ind][i], coo=False)]
-            self.order_ele_operator_list[field_ind] = coo_matrix(
-                                   block_diag(*order_ele_operator_list_temp))
-        return self.order_ele_operator_list
+                    self.d2c_order_ele_degree[field_ind][i], 
+                    self.d2c_order_ele_knots[field_ind][i], coo=False)]
+            if len(d2c_order_ele_operator_list_temp) > 0:
+                self.d2c_order_ele_operator_list[field_ind] = coo_matrix(
+                                       block_diag(*d2c_order_ele_operator_list_temp))
 
 
-    def set_init_knots(self, surf_inds, p_list, knots_list):
-        self.design_degree = [[] for field in self.opt_field]
-        self.design_knots = [[] for field in self.opt_field]
-        self.cp_coarse_sizes = [[] for field in self.opt_field]
-        self.cp_coarse_shapes = [[] for field in self.opt_field]
+        self.d2c_ref_knots = [[] for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            for i, surf_ind in enumerate(self.shopt_surf_inds_explicit[field_ind]):
+                self.d2c_ref_knots[field_ind] += [[],]
+                for side in range(2):
+                    d2c_ref_knot_temp = []
+                    coarse_knot_temp = self.coarse_knots_all[surf_ind][side]
+                    for k in coarse_knot_temp:
+                        if k not in self.d2c_order_ele_knots[field_ind][i][side]:
+                            d2c_ref_knot_temp += [k]
+                    self.d2c_ref_knots[field_ind][i] += [np.array(d2c_ref_knot_temp)]
+
+        self.d2c_knot_ref_operator_list = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            d2c_knot_ref_operator_list_temp = []
+            for i, surf_ind in enumerate(self.shopt_surf_inds_explicit[field_ind]):
+                d2c_knot_ref_operator_list_temp += [
+                surface_knot_refine_operator(self.d2c_order_ele_knots[field_ind][i], 
+                    self.d2c_ref_knots[field_ind][i], coo=False)]
+            if len(d2c_knot_ref_operator_list_temp) > 0:
+                self.d2c_knot_ref_operator_list[field_ind] = coo_matrix(
+                                    block_diag(*d2c_knot_ref_operator_list_temp))
+
+        self.d2c_ref_operator_list = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            order_ele_mat = self.d2c_order_ele_operator_list[field_ind]
+            ref_knot_mat = self.d2c_knot_ref_operator_list[field_ind]
+            if order_ele_mat is not None:
+                self.d2c_ref_operator_list[field_ind] = coo_matrix(ref_knot_mat*order_ele_mat)
+
+        return self.d2c_ref_operator_list
+
+    def get_init_design_cp(self):
+        self.init_design_cp = [None for field in self.opt_field]
+        self.init_design_cp_simp = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            A_mat = self.d2c_ref_operator_list[field_ind]
+            if A_mat is not None:
+                b_vec = self.coarse_cp_opt_explicit_flat[field_ind]
+                init_cp = solve_nonsquare(A_mat.todense(),
+                                          np.array([b_vec]).T)
+                self.init_design_cp[field_ind] = np.asarray(init_cp)[:,0]
+                self.init_design_cp_simp[field_ind] = np.asarray(init_cp)[:,0].copy()
+        return self.init_design_cp
+
+    #########################################################################
+
+    def set_coarse_knots_all(self, p_list, knots_list):
+        """
+        Perform CP2Xi operation in the coarse level
+
+        len(p_list) == preprocessor.num_surfs
+        len(knots_list) == preprocessor.num_surfs
+        """
+        self.coarse_degree_all = []
+        self.coarse_knots_all = []
+        self.coarse_cp_sizes_all = []
+        self.coarse_cp_shapes_all = []
+
+        for s_ind in range(self.preprocessor.num_surfs):
+            self.coarse_degree_all += [p_list[s_ind]]
+            self.coarse_knots_all += [knots_list[s_ind]]
+            l = len(knots_list[s_ind][0])-p_list[s_ind][0]-1
+            m = len(knots_list[s_ind][1])-p_list[s_ind][1]-1
+            self.coarse_cp_sizes_all += [l*m]
+            self.coarse_cp_shapes_all += [[l,m]]
+
+        self.coarse_degree_opt = [[] for field in self.opt_field]
+        self.coarse_knots_opt = [[] for field in self.opt_field]
+        self.coarse_cp_sizes_opt = [[] for field in self.opt_field]
+        self.coarse_cp_shapes_opt = [[] for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
             for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                local_ind = surf_inds.index(s_ind)
-                self.design_degree[field_ind] += [p_list[local_ind]]
-                self.design_knots[field_ind] += [knots_list[local_ind]]
-                l = len(knots_list[local_ind][0])-p_list[local_ind][0]-1
-                m = len(knots_list[local_ind][1])-p_list[local_ind][1]-1
-                self.cp_coarse_sizes[field_ind] += [l*m]
-                self.cp_coarse_shapes[field_ind] += [[l,m]]
+                self.coarse_degree_opt[field_ind] += [p_list[s_ind]]
+                self.coarse_knots_opt[field_ind] += [knots_list[s_ind]]
+                l = len(knots_list[s_ind][0])-p_list[s_ind][0]-1
+                m = len(knots_list[s_ind][1])-p_list[s_ind][1]-1
+                self.coarse_cp_sizes_opt[field_ind] += [l*m]
+                self.coarse_cp_shapes_opt[field_ind] += [[l,m]]
 
-        # Constraint related properties
-        self.align_dir_list = [None for field in self.opt_field]
-        self.cp_coarse_free_dofs = [np.arange(np.sum(self.cp_coarse_sizes[field_ind])) 
-                                for field_ind in range(len(self.opt_field))]
-        self.cp_coarse_free_dofs_decate = [[] for field in self.opt_field]
+        self.coarse2analysis_refinement_opt()
+        self.coarse2analysis_knot_refinement_all()
+        self.get_coarse_cp_all()
 
-        self.cp_coarse_align_deriv_sub_list = [[] for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            ind_off = 0
-            for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                self.cp_coarse_align_deriv_sub_list[field_ind] += \
-                    [np.eye(self.cp_coarse_sizes[field_ind][i])]
-                self.cp_coarse_free_dofs_decate[field_ind] += \
-                    [np.arange(self.cp_coarse_sizes[field_ind][i])+ind_off]
-                ind_off += self.cp_coarse_sizes[field_ind][i]
-
-        # self.cp_design2analysis_deriv_list = [None for field in self.opt_field]
-        self.cp_coarse_align_deriv_list = [coo_matrix(block_diag(*mat_list)) 
-                                           for mat_list in 
-                                           self.cp_coarse_align_deriv_sub_list]
-
-        self.order_ele_operator_list = [None for field in self.opt_field]
-        self.knot_refine_operator_list = [None for field in self.opt_field]
-
-        self.cp_coarse_pin_field = []
-        self.cp_coarse_regu_field = []
-        self.cp_coarse_dist_field = []
-        
-        self.cp_coarse_dist_deriv_list = [None for field in self.opt_field]
-        self.cp_coarse_regu_deriv_list = [None for field in self.opt_field]
-        self.cp_coarse_pin_deriv_list = [None for field in self.opt_field]
-        self.cp_coarse_pin_dofs = [[] for field in self.opt_field]
-        self.cp_coarse_pin_vals = [[] for field in self.opt_field]
-
-    def set_order_elevation(self, surf_inds, p_list, knots_list):
-        self.order_ele_degree = [[] for field in self.opt_field]
-        self.order_ele_knots = [[] for field in self.opt_field]
+    def coarse2analysis_refinement_opt(self, degree=[3,3]):
+        """
+        Coarse to analysis knot refinement operator
+        """
+        self.c2a_order_ele_degree_opt = [[] for field in self.opt_field]
+        self.c2a_order_ele_knots_opt = [[] for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
             for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                local_ind = surf_inds.index(s_ind)
-                self.order_ele_degree[field_ind] += [p_list[local_ind]]
-                self.order_ele_knots[field_ind] += [knots_list[local_ind]]
+                self.c2a_order_ele_degree_opt[field_ind] += [degree]
+                coarse_knot = self.coarse_knots_opt[field_ind][i]
+                coarse_degree = self.coarse_degree_opt[field_ind][i]
+                p_diff0 = degree[0]-coarse_degree[0]
+                p_diff1 = degree[1]-coarse_degree[1]
+                c2a_order_ele_knot = [[0,]*p_diff0+coarse_knot[0]+[1,]*p_diff0,
+                                      [0,]*p_diff1+coarse_knot[1]+[1,]*p_diff1]
+                self.c2a_order_ele_knots_opt[field_ind] += [c2a_order_ele_knot]
 
+        self.c2a_order_ele_operator_list_opt = [None for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
-            order_ele_operator_list_temp = []
+            c2a_order_ele_operator_list_temp = []
             for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                order_ele_operator_list_temp += [
+                c2a_order_ele_operator_list_temp += [
                     surface_order_elevation_operator(
-                    self.design_degree[field_ind][i], 
-                    self.design_knots[field_ind][i], 
-                    self.order_ele_degree[field_ind][i], 
-                    self.order_ele_knots[field_ind][i], coo=False)]
-            self.order_ele_operator_list[field_ind] = coo_matrix(
-                                   block_diag(*order_ele_operator_list_temp))
-        return self.order_ele_operator_list
+                    self.coarse_degree_opt[field_ind][i], 
+                    self.coarse_knots_opt[field_ind][i], 
+                    self.c2a_order_ele_degree_opt[field_ind][i], 
+                    self.c2a_order_ele_knots_opt[field_ind][i], coo=False)]
+            if len(c2a_order_ele_operator_list_temp) > 0:
+                self.c2a_order_ele_operator_list_opt[field_ind] = coo_matrix(
+                                       block_diag(*c2a_order_ele_operator_list_temp))
 
-    def set_knot_refinement(self):
-        self.ref_knots = [[] for field in self.opt_field]
+        ###########################################################
+
+
+        self.c2a_ref_knots_opt = [[] for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
             for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                self.ref_knots[field_ind] += [[],]
+                self.c2a_ref_knots_opt[field_ind] += [[],]
                 for side in range(2):
                     ref_knot_temp = []
                     ana_knot_temp = self.analysis_knots[field_ind][i][side]
                     for k in ana_knot_temp:
-                        if k not in self.order_ele_knots[field_ind][i][side]:
+                        if k not in self.c2a_order_ele_knots_opt[field_ind][i][side]:
                             ref_knot_temp += [k]
-                    self.ref_knots[field_ind][i] += [np.array(ref_knot_temp)]
+                    self.c2a_ref_knots_opt[field_ind][i] += \
+                        [np.array(ref_knot_temp)]
+
+        self.c2a_knot_ref_operator_list_opt = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            c2a_knot_ref_operator_list_opt_temp = []
+            for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
+                c2a_knot_ref_operator_list_opt_temp += [
+                surface_knot_refine_operator(self.c2a_order_ele_knots_opt[field_ind][i], 
+                    self.c2a_ref_knots_opt[field_ind][i], coo=False)]
+            self.c2a_knot_ref_operator_list_opt[field_ind] = coo_matrix(
+                                block_diag(*c2a_knot_ref_operator_list_opt_temp))
+
+        self.c2a_ref_operator_list_opt = [None for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            order_ele_mat = self.c2a_order_ele_operator_list_opt[field_ind]
+            ref_knot_mat = self.c2a_knot_ref_operator_list_opt[field_ind]
+            if order_ele_mat is not None:
+                self.c2a_ref_operator_list_opt[field_ind] = coo_matrix(ref_knot_mat*order_ele_mat)
+
+        return self.c2a_ref_operator_list_opt
+
+
+    def coarse2analysis_knot_refinement_all(self, degree=[3,3]):
+        self.c2a_order_ele_degree_all = []
+        self.c2a_order_ele_knots_all = []
+
+        for i in range(self.preprocessor.num_surfs):
+            self.c2a_order_ele_degree_all += [degree]
+            coarse_knot = self.coarse_knots_all[i]
+            coarse_degree = self.coarse_degree_all[i]
+            p_diff0 = degree[0]-coarse_degree[0]
+            p_diff1 = degree[1]-coarse_degree[1]
+            c2a_order_ele_knot = [[0,]*p_diff0+coarse_knot[0]+[1,]*p_diff0,
+                                  [0,]*p_diff1+coarse_knot[1]+[1,]*p_diff1]
+            self.c2a_order_ele_knots_all += [c2a_order_ele_knot]
+
+        self.c2a_order_ele_operator_list_all = []
+        for i in range(self.preprocessor.num_surfs):
+            self.c2a_order_ele_operator_list_all += [
+                surface_order_elevation_operator(
+                self.coarse_degree_all[i], 
+                self.coarse_knots_all[i], 
+                self.c2a_order_ele_degree_all[i], 
+                self.c2a_order_ele_knots_all[i], coo=False)]
+
+        self.c2a_order_ele_operator_all = coo_matrix(
+                               block_diag(*self.c2a_order_ele_operator_list_all))
+
+        ###########################################################
+
+        self.c2a_ref_knots_all = []
+        for surf_ind in range(self.preprocessor.num_surfs):
+            self.c2a_ref_knots_all += [[],]
+            for side in range(2):
+                ref_knot_temp = []
+                ana_knot_temp = self.analysis_knots_all[surf_ind][side]
+                for k in ana_knot_temp:
+                    if k not in self.c2a_order_ele_knots_all[surf_ind][side]:
+                        ref_knot_temp += [k]
+                self.c2a_ref_knots_all[surf_ind] += [np.array(ref_knot_temp)]
+
+        self.c2a_knot_ref_operator_list_all = []
+        for surf_ind in range(self.preprocessor.num_surfs):
+            self.c2a_knot_ref_operator_list_all += [
+            surface_knot_refine_operator(self.c2a_order_ele_knots_all[surf_ind], 
+                self.c2a_ref_knots_all[surf_ind], coo=False)]
+
+        self.c2a_knot_ref_operator_all = coo_matrix(
+                            block_diag(*self.c2a_knot_ref_operator_list_all))
+
+        self.c2a_ref_operator_list_all = []
+        for i in range(self.preprocessor.num_surfs):
+            order_ele_mat = self.c2a_order_ele_operator_list_all[i]
+            ref_knot_mat = self.c2a_knot_ref_operator_list_all[i]
+            self.c2a_ref_operator_list_all += [coo_matrix(ref_knot_mat*order_ele_mat)]
+        return self.c2a_ref_operator_list_all
+
+
+    def get_coarse_cp_all(self):
+        self.analysis_cp_all_flat = np.concatenate(self.analysis_cp_all, axis=0)
+        self.coarse_cp_all_decate = []
+        # c2a_ref_mat = self.c2a_knot_ref_operator_all.todense()
+        for surf_ind in range(self.preprocessor.num_surfs):
+            c2a_ref_mat = self.c2a_ref_operator_list_all[surf_ind].todense()
+            self.coarse_cp_all_decate += [np.asarray(solve_nonsquare(
+                               c2a_ref_mat,
+                               self.analysis_cp_all[surf_ind]))]
+        self.coarse_cp_all_flat = np.concatenate(self.coarse_cp_all_decate, axis=0)
+        self.coarse_cp_all = [self.coarse_cp_all_decate[i].
+                              reshape(self.coarse_cp_shapes_all[i][1],
+                              self.coarse_cp_shapes_all[i][0],-1).transpose(1,0,2) 
+                              for i in range(self.preprocessor.num_surfs)]
+
+        self.coarse_cp_opt_flat = [[] for field in self.opt_field]
+        self.coarse_cp_opt_explicit_flat = [[] for field in self.opt_field]
+        for field_ind, field in enumerate(self.opt_field):
+            for i, s_ind0 in enumerate(self.shopt_surf_inds[field_ind]):
+                self.coarse_cp_opt_flat[field_ind] += \
+                    [self.coarse_cp_all_decate[s_ind0][:,field]]
+            for j, s_ind1 in enumerate(self.shopt_surf_inds_explicit[field_ind]):
+                self.coarse_cp_opt_explicit_flat[field_ind] += \
+                    [self.coarse_cp_all_decate[s_ind1][:,field]]
 
         for field_ind, field in enumerate(self.opt_field):
-            knot_refine_operator_list_temp = []
-            for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                knot_refine_operator_list_temp += [
-                surface_knot_refine_operator(self.order_ele_knots[field_ind][i], 
-                    self.ref_knots[field_ind][i], coo=False)]
-            self.knot_refine_operator_list[field_ind] = coo_matrix(
-                                block_diag(*knot_refine_operator_list_temp))
+            self.coarse_cp_opt_flat[field_ind] = \
+                np.concatenate(self.coarse_cp_opt_flat[field_ind])
+            if len(self.coarse_cp_opt_explicit_flat[field_ind]):
+                self.coarse_cp_opt_explicit_flat[field_ind] = \
+                    np.concatenate(self.coarse_cp_opt_explicit_flat[field_ind])
+            else:
+                self.coarse_cp_opt_explicit_flat[field_ind] = None
 
-        return self.knot_refine_operator_list
+    #########################################################################
 
-    # def set_order_ele(self, order_ele_degree, order_ele_knots):
-    #     self.order_ele_degree = order_ele_degree
-    #     self.order_ele_knots = order_ele_knots
-    #     # self.order_ele_knots = [np.array([0.]*(self.order_ele_degree[0]+1)\
-    #     #                                 +[1.]*(self.order_ele_degree[0]+1)),
-    #     #                         np.array([0.]*(self.order_ele_degree[1]+1)\
-    #     #                                 +[1.]*(self.order_ele_degree[1]+1))]
-
-           
-    #     self.order_ele_operator_list = [[] for field in self.opt_field]
+    # def set_init_knots(self, surf_inds, p_list, knots_list):
+    #     self.design_degree = [[] for field in self.opt_field]
+    #     self.design_knots = [[] for field in self.opt_field]
+    #     self.design_cp_sizes = [[] for field in self.opt_field]
+    #     self.design_cp_shapes = [[] for field in self.opt_field]
     #     for field_ind, field in enumerate(self.opt_field):
-    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-    #             self.order_ele_operator_list[field_ind] += [
-    #             surface_order_elevation_operator(
-    #                 self.design_degree[i], 
-    #                 self.design_knots[i], 
-    #                 self.order_ele_degree, self.order_ele_knots, coo=False)]
-    #     self.order_ele_operator = [coo_matrix(block_diag(*order_ele_list)) for 
-    #                                order_ele_list in self.order_ele_operator_list]
-
-    #     self.ref_knots = [[] for field in self.opt_field]
-    #     for field_ind, field in enumerate(self.opt_field):
-    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-    #             self.ref_knots[field_ind] += [[],]
-    #             for side in range(2):
-    #                 self.ref_knots[field_ind][i] += \
-    #                     [self.analysis_knots[field_ind][i][side]\
-    #                     [self.order_ele_degree[side]+1:-(self.order_ele_degree[side]+1)]]
-
-    #     self.knot_refine_operator_list = [[] for field in self.opt_field]
-    #     for field_ind, field in enumerate(self.opt_field):
-    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
-    #             self.knot_refine_operator_list[field_ind] += [
-    #             surface_knot_refine_operator(self.order_ele_knots, 
-    #                 self.ref_knots[field_ind][i], coo=False)]
-    #     self.knot_refine_operator = [coo_matrix(block_diag(*knot_ref_list)) for 
-    #                                  knot_ref_list in self.knot_refine_operator_list]
-
-    #     for field_ind, field in enumerate(self.opt_field):
-    #         self.cp_design2analysis_deriv_list[field_ind] = coo_matrix(
-    #                                     self.knot_refine_operator[field_ind]
-    #                                     *self.order_ele_operator[field_ind])
+    #         for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             local_ind = surf_inds.index(s_ind)
+    #             self.design_degree[field_ind] += [p_list[local_ind]]
+    #             self.design_knots[field_ind] += [knots_list[local_ind]]
+    #             l = len(knots_list[local_ind][0])-p_list[local_ind][0]-1
+    #             m = len(knots_list[local_ind][1])-p_list[local_ind][1]-1
+    #             self.design_cp_sizes[field_ind] += [l*m]
+    #             self.design_cp_shapes[field_ind] += [[l,m]]
 
     #     # Constraint related properties
     #     self.align_dir_list = [None for field in self.opt_field]
-    #     self.cp_coarse_free_dofs = [np.arange(np.sum(self.cp_coarse_sizes[field_ind])) 
+    #     self.cp_coarse_free_dofs = [np.arange(np.sum(self.design_cp_sizes[field_ind])) 
     #                             for field_ind in range(len(self.opt_field))]
     #     self.cp_coarse_free_dofs_decate = [[] for field in self.opt_field]
-    #     self.cp_coarse_align_deriv_list = [None for field in self.opt_field]
-    #     self.cp_coarse_pin_deriv_list = [None for field in self.opt_field]
-    #     self.cp_coarse_regu_deriv_list = [None for field in self.opt_field]
 
     #     self.cp_coarse_align_deriv_sub_list = [[] for field in self.opt_field]
     #     for field_ind, field in enumerate(self.opt_field):
     #         ind_off = 0
     #         for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
     #             self.cp_coarse_align_deriv_sub_list[field_ind] += \
-    #                 [np.eye(self.cp_coarse_sizes[field_ind][i])]
+    #                 [np.eye(self.design_cp_sizes[field_ind][i])]
     #             self.cp_coarse_free_dofs_decate[field_ind] += \
-    #                 [np.arange(self.cp_coarse_sizes[field_ind][i])+ind_off]
-    #             ind_off += self.cp_coarse_sizes[field_ind][i]
+    #                 [np.arange(self.design_cp_sizes[field_ind][i])+ind_off]
+    #             ind_off += self.design_cp_sizes[field_ind][i]
 
+    #     # self.cp_design2analysis_deriv_list = [None for field in self.opt_field]
+    #     self.cp_coarse_align_deriv_list = [coo_matrix(block_diag(*mat_list)) 
+    #                                        for mat_list in 
+    #                                        self.cp_coarse_align_deriv_sub_list]
 
-    def get_init_cp_coarse(self):
-        self.init_cp_coarse = [None for field in self.opt_field]
-        self.init_cp_design = [None for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            A_mat = self.knot_refine_operator_list[field_ind]\
-                    *self.order_ele_operator_list[field_ind]
-            b_vec = self.init_analysis_cp[field_ind]
-            init_cp = solve_nonsquare(A_mat.todense(),
-                                      np.array([b_vec]).T)
-            self.init_cp_coarse[field_ind] = np.asarray(init_cp)[:,0]
-            self.init_cp_design[field_ind] = np.asarray(init_cp)[:,0].copy()
-        return self.init_cp_coarse
+    #     self.order_ele_operator_list = [None for field in self.opt_field]
+    #     self.knot_refine_operator_list = [None for field in self.opt_field]
+
+    #     self.cp_coarse_pin_field = []
+    #     self.cp_coarse_regu_field = []
+    #     self.cp_coarse_dist_field = []
+        
+    #     self.cp_coarse_dist_deriv_list = [None for field in self.opt_field]
+    #     self.cp_coarse_regu_deriv_list = [None for field in self.opt_field]
+    #     self.cp_coarse_pin_deriv_list = [None for field in self.opt_field]
+    #     self.cp_coarse_pin_dofs = [[] for field in self.opt_field]
+    #     self.cp_coarse_pin_vals = [[] for field in self.opt_field]
+
+    # def set_order_elevation_by_field(self, p_list, knots_list):
+    #     self.order_ele_degree = p_list
+    #     self.order_ele_knots = knots_list
+    #     # for field_ind, field in enumerate(self.opt_field):
+    #     #     for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #     #         local_ind = surf_inds.index(s_ind)
+    #     #         self.order_ele_degree[field_ind] += [p_list[local_ind]]
+    #     #         self.order_ele_knots[field_ind] += [knots_list[local_ind]]
+
+    #     for field_ind, field in enumerate(self.opt_field):
+    #         order_ele_operator_list_temp = []
+    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             order_ele_operator_list_temp += [
+    #                 surface_order_elevation_operator(
+    #                 self.design_degree[field_ind][i], 
+    #                 self.design_knots[field_ind][i], 
+    #                 self.order_ele_degree[field_ind][i], 
+    #                 self.order_ele_knots[field_ind][i], coo=False)]
+    #         self.order_ele_operator_list[field_ind] = coo_matrix(
+    #                                block_diag(*order_ele_operator_list_temp))
+    #     return self.order_ele_operator_list
+
+    # def set_order_elevation(self, surf_inds, p_list, knots_list):
+    #     self.order_ele_degree = [[] for field in self.opt_field]
+    #     self.order_ele_knots = [[] for field in self.opt_field]
+    #     for field_ind, field in enumerate(self.opt_field):
+    #         for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             local_ind = surf_inds.index(s_ind)
+    #             self.order_ele_degree[field_ind] += [p_list[local_ind]]
+    #             self.order_ele_knots[field_ind] += [knots_list[local_ind]]
+
+    #     for field_ind, field in enumerate(self.opt_field):
+    #         order_ele_operator_list_temp = []
+    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             order_ele_operator_list_temp += [
+    #                 surface_order_elevation_operator(
+    #                 self.design_degree[field_ind][i], 
+    #                 self.design_knots[field_ind][i], 
+    #                 self.order_ele_degree[field_ind][i], 
+    #                 self.order_ele_knots[field_ind][i], coo=False)]
+    #         self.order_ele_operator_list[field_ind] = coo_matrix(
+    #                                block_diag(*order_ele_operator_list_temp))
+    #     return self.order_ele_operator_list
+
+    # def set_knot_refinement(self):
+    #     self.ref_knots = [[] for field in self.opt_field]
+    #     for field_ind, field in enumerate(self.opt_field):
+    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             self.ref_knots[field_ind] += [[],]
+    #             for side in range(2):
+    #                 ref_knot_temp = []
+    #                 ana_knot_temp = self.analysis_knots[field_ind][i][side]
+    #                 for k in ana_knot_temp:
+    #                     if k not in self.order_ele_knots[field_ind][i][side]:
+    #                         ref_knot_temp += [k]
+    #                 self.ref_knots[field_ind][i] += [np.array(ref_knot_temp)]
+
+    #     for field_ind, field in enumerate(self.opt_field):
+    #         knot_refine_operator_list_temp = []
+    #         for i, surf_ind in enumerate(self.shopt_surf_inds[field_ind]):
+    #             knot_refine_operator_list_temp += [
+    #             surface_knot_refine_operator(self.order_ele_knots[field_ind][i], 
+    #                 self.ref_knots[field_ind][i], coo=False)]
+    #         self.knot_refine_operator_list[field_ind] = coo_matrix(
+    #                             block_diag(*knot_refine_operator_list_temp))
+
+    #     return self.knot_refine_operator_list
 
     def set_cp_align(self, field, align_dir_list):
         field_ind = self.opt_field.index(field)
@@ -1058,32 +1254,24 @@ class CPSurfDesign2Analysis(object):
         ind_off = 0
         for i, align_dir in enumerate(align_dir_list):
             if align_dir is not None:
-                cp_shape = self.cp_coarse_shapes[field_ind][i]
+                cp_shape = self.design_cp_shapes[field_ind][i]
                 deriv_mat, free_dofs = surface_cp_align_operator(
                                        cp_shape, align_dir, coo=False)
                 self.cp_coarse_align_deriv_sub_list[field_ind][i] = deriv_mat
             else:
-                free_dofs = list(range(self.cp_coarse_sizes[field_ind][i]))
+                free_dofs = list(range(self.design_cp_sizes[field_ind][i]))
             self.cp_coarse_free_dofs_decate[field_ind][i] = np.array(free_dofs)+ind_off
-            ind_off += self.cp_coarse_sizes[field_ind][i]
+            ind_off += self.design_cp_sizes[field_ind][i]
 
         self.cp_coarse_free_dofs[field_ind] = np.concatenate(
             self.cp_coarse_free_dofs_decate[field_ind])
-        self.init_cp_design[field_ind] = self.init_cp_design[field_ind]\
+        self.init_design_cp_simp[field_ind] = self.init_design_cp_simp[field_ind]\
                                         [self.cp_coarse_free_dofs[field_ind]]
 
         self.cp_coarse_align_deriv_list[field_ind] = coo_matrix(
             block_diag(*self.cp_coarse_align_deriv_sub_list[field_ind]))
 
         return self.cp_coarse_align_deriv_list[field_ind]
-
-        # self.cp_design2analysis_deriv_list[field_ind] = \
-        #     coo_matrix(self.cp_design2analysis_deriv_list[field_ind]*
-        #     self.cp_coarse_align_deriv_list[field_ind])
-
-        # self.init_cp_design[field_ind] = self.init_cp_design[field_ind]\
-        #                                 [self.cp_coarse_free_dofs[field_ind]]
-        # return self.cp_design2analysis_deriv_list[field_ind]
 
 
     def set_cp_pin(self, field, pin_dir0_list, pin_side0_list,
@@ -1096,8 +1284,8 @@ class CPSurfDesign2Analysis(object):
         if pin_dofs is not None:
             cp_coarse_pin_dofs_temp += pin_dofs
         else:
-            cp_shapes = self.cp_coarse_shapes[field_ind]
-            cp_sizes = self.cp_coarse_sizes[field_ind]
+            cp_shapes = self.design_cp_shapes[field_ind]
+            cp_sizes = self.design_cp_sizes[field_ind]
             ind_off = 0
             for i, pin_dir0 in enumerate(pin_dir0_list):
                 if pin_dir0 is not None:
@@ -1125,16 +1313,16 @@ class CPSurfDesign2Analysis(object):
                         l, m = cp_shapes[i]
                         pin_dir1_dof = []
                         if pin_dir1 == 0:
-                            # for side0 in pin_side1_list[i]:
-                                if 0 in pin_side1_list[i]:
+                            for side0 in pin_side0_list[i]:
+                                if 0 in side0:
                                     pin_dir1_dof += list(range(0,l*m,l))
-                                if 1 in pin_side1_list[i]:
+                                if 1 in side0:
                                     pin_dir1_dof += list(range(l-1,l*m,l))
                         elif pin_dir1 == 1:
-                            # for side0 in pin_side1_list[i]:
-                                if 0 in pin_side1_list[i]:
+                            for side0 in pin_side0_list[i]:
+                                if 0 in side0:
                                     pin_dir1_dof += list(range(0,l))
-                                if 1 in pin_side1_list[i]:
+                                if 1 in side0:
                                     pin_dir1_dof += list(range(l*(m-1), l*m))
                         cp_coarse_pin_dofs_temp += [dof+ind_off for dof in pin_dir1_dof]
                     ind_off += cp_sizes[i]
@@ -1148,7 +1336,7 @@ class CPSurfDesign2Analysis(object):
         if pin_vals is not None:
             self.cp_coarse_pin_vals[field_ind] = pin_vals
         else:
-            self.cp_coarse_pin_vals[field_ind] = list(self.init_cp_coarse[field_ind]\
+            self.cp_coarse_pin_vals[field_ind] = list(self.init_design_cp[field_ind]\
                                                  [self.cp_coarse_pin_dofs[field_ind]])
 
         deriv_mat = np.zeros((len(self.cp_coarse_pin_vals[field_ind]),
@@ -1169,7 +1357,7 @@ class CPSurfDesign2Analysis(object):
         for i, regu_dir in enumerate(regu_dir_list):
             if regu_dir is not None:
                 deriv_mat_temp_list = [None for s_ind in self.shopt_surf_inds[field_ind]]
-                cp_shape = self.cp_coarse_shapes[field_ind][i]
+                cp_shape = self.design_cp_shapes[field_ind][i]
                 if self.align_dir_list[field_ind] is not None:
                     if self.align_dir_list[field_ind][i] == 0:
                         cp_shape[0] = 1

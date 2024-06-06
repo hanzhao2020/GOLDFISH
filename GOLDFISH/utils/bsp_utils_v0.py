@@ -1125,16 +1125,16 @@ class CPSurfDesign2Analysis(object):
                         l, m = cp_shapes[i]
                         pin_dir1_dof = []
                         if pin_dir1 == 0:
-                            # for side0 in pin_side1_list[i]:
-                                if 0 in pin_side1_list[i]:
+                            for side0 in pin_side0_list[i]:
+                                if 0 in side0:
                                     pin_dir1_dof += list(range(0,l*m,l))
-                                if 1 in pin_side1_list[i]:
+                                if 1 in side0:
                                     pin_dir1_dof += list(range(l-1,l*m,l))
                         elif pin_dir1 == 1:
-                            # for side0 in pin_side1_list[i]:
-                                if 0 in pin_side1_list[i]:
+                            for side0 in pin_side0_list[i]:
+                                if 0 in side0:
                                     pin_dir1_dof += list(range(0,l))
-                                if 1 in pin_side1_list[i]:
+                                if 1 in side0:
                                     pin_dir1_dof += list(range(l*(m-1), l*m))
                         cp_coarse_pin_dofs_temp += [dof+ind_off for dof in pin_dir1_dof]
                     ind_off += cp_sizes[i]
