@@ -5,6 +5,7 @@ from GOLDFISH.csdl_models.compliance_model import *
 from GOLDFISH.csdl_models.int_energy_model import *
 from GOLDFISH.csdl_models.disp_states_model import *
 from GOLDFISH.csdl_models.volume_model import *
+from GOLDFISH.csdl_models.max_vmstress_model import *
 # FFD-based shape optimization compoenents
 from GOLDFISH.csdl_models.cpffd2surf_model import *
 from GOLDFISH.csdl_models.cpffd_align_model import *

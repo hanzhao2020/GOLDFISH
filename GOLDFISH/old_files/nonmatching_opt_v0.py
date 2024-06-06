@@ -2,7 +2,7 @@ from PENGoLINS.nonmatching_coupling import *
 from GOLDFISH.utils.opt_utils import *
 from GOLDFISH.utils.bsp_utils import *
 
-from GOLDFISH.cpiga2xi import *
+# from cpiga2xi import *
 
 def Lambda_tilde(R, num_pts, phy_dim, para_dim, order=0):
     """
@@ -83,6 +83,8 @@ class NonMatchingOpt(NonMatchingCoupling):
     def __init__(self, splines, E, h_th, nu, 
                  int_V_family='CG', int_V_degree=1,
                  int_dx_metadata=None, contact=None, 
+                 opt_shape=True, opt_field=[0,1,2], 
+                 opt_thickness=False, var_thickness=False, 
                  comm=None):
         """
         Parameters
@@ -91,6 +93,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         E : ufl Constant or list, Young's modulus
         h_th : ufl Constant or list, thickness of the splines
         nu : ufl Constant or list, Poisson's ratio
+        num_field : int, optional
+            Number of field of the unknowns. Default is 3.
         int_V_family : str, optional, element family for 
             mortar meshes. Default is 'CG'.
         int_V_degree : int, optional, default is 1.
@@ -106,165 +110,114 @@ class NonMatchingOpt(NonMatchingCoupling):
         super().__init__(splines, E, h_th, nu, 
                          int_V_family, int_V_degree,
                          int_dx_metadata, contact, comm)
-
-        self.opt_shape = False
-        self.opt_field = []
-        self.opt_thickness = False
-        self.var_thickness = False
-        self.use_aero_pressure = False
+        self.opt_field = opt_field
+        self.opt_shape = opt_shape
+        self.opt_thickness = opt_thickness
+        self.var_thickness = var_thickness
+        self.nsd = self.splines[0].nsd
 
         # Create nested vectors in IGA DoFs
-        self.vec_iga_list              = []
-        self.vec_scalar_iga_list       = []
-        self.vec_iga_dof_list          = []
-        self.vec_scalar_iga_dof_list   = []
+        self.vec_iga_list = []
+        self.vec_scalar_iga_list = []
         for s_ind in range(self.num_splines):
-            self.vec_iga_list += [zero_petsc_vec(self.splines[s_ind].M.size(1),
-                                                 comm=self.comm)]
+            self.vec_iga_list += [zero_petsc_vec(
+                                  self.splines[s_ind].M.size(1),
+                                  comm=self.comm)]
             self.vec_scalar_iga_list += [zero_petsc_vec(
-                                         self.splines[s_ind].M_control.size(1),
-                                         comm=self.comm)]
-            self.vec_iga_dof_list += [self.splines[s_ind].M.size(1),]
-            self.vec_scalar_iga_dof_list += \
-                                    [self.splines[s_ind].M_control.size(1),]
-
-        self.vec_iga_nest        = create_nest_PETScVec(
-                                   self.vec_iga_list, comm=self.comm)
+                                     self.splines[s_ind].M_control.size(1),
+                                     comm=self.comm)]
+        self.vec_iga_nest = create_nest_PETScVec(self.vec_iga_list,
+                                                 comm=self.comm)
         self.vec_scalar_iga_nest = create_nest_PETScVec(
-                                   self.vec_scalar_iga_list, comm=self.comm)
-        self.vec_iga_dof         = self.vec_iga_nest.getSizes()[1]
-        self.vec_scalar_iga_dof  = self.vec_scalar_iga_nest.getSizes()[1]
+                                   self.vec_scalar_iga_list,
+                                   comm=self.comm)
+        self.vec_iga_dof = self.vec_iga_nest.getSizes()[1]
+        self.vec_scalar_iga_dof = self.vec_scalar_iga_nest.getSizes()[1]
 
         # Create nested vectors in FE DoFs
-        self.vec_fe_list               = []
-        self.vec_scalar_fe_list        = []
-        self.vec_fe_dof_list           = []
-        self.vec_scalar_fe_dof_list    = []
+        self.vec_fe_list = []
+        self.vec_scalar_fe_list = []
         for s_ind in range(self.num_splines):
-            self.vec_fe_list += [zero_petsc_vec(self.splines[s_ind].M.size(0),
+            self.vec_fe_list += [zero_petsc_vec(
+                                 self.splines[s_ind].M.size(0),
                                  comm=self.comm)]
             self.vec_scalar_fe_list += [zero_petsc_vec(
-                                        self.splines[s_ind].M_control.size(0),
-                                        comm=self.comm)]
-            self.vec_fe_dof_list += [self.splines[s_ind].M.size(0),]
-            self.vec_scalar_fe_dof_list += \
-                                    [self.splines[s_ind].M_control.size(0),]
-
-        self.vec_fe_nest        = create_nest_PETScVec(self.vec_fe_list, 
-                                                       comm=self.comm)
-        self.vec_scalar_fe_nest = create_nest_PETScVec(self.vec_scalar_fe_list,
+                                    self.splines[s_ind].M_control.size(0),
+                                    comm=self.comm)]
+        self.vec_fe_nest = create_nest_PETScVec(self.vec_fe_list, 
+                                                comm=self.comm)
+        self.vec_scalar_fe_nest = create_nest_PETScVec(
+                                  self.vec_scalar_fe_list,
                                   comm=self.comm)
-        self.vec_fe_dof         = self.vec_fe_nest.getSizes()[1]
-        self.vec_scalar_fe_dof  = self.vec_scalar_fe_nest.getSizes()[1]
+        self.vec_fe_dof = self.vec_fe_nest.getSizes()[1]
+        self.vec_scalar_fe_dof = self.vec_scalar_fe_nest.getSizes()[1]
 
         # Create nested displacements in IGA DoFs
         self.u_iga_nest = self.vec_iga_nest.copy()
 
-        # # Create nested control points in IGA DoFs
-        # self.cp_iga_nest = self.vec_scalar_iga_nest.copy()
+        # Create nested cpFuncs vectors (in FE DoFs)
+        self.cp_funcs_list = [[] for i in range(self.nsd)]
+        self.cp_funcs_nest = [None for i in range(self.nsd)]
+        for field in range(self.nsd):
+            for s_ind in range(self.num_splines):
+                self.cp_funcs_list[field] += [v2p(self.splines[s_ind].
+                                              cpFuncs[field].vector()),]
+            self.cp_funcs_nest[field] = create_nest_PETScVec(
+                                        self.cp_funcs_list[field],
+                                        comm=self.comm)
 
-        # # Create nested cpFuncs vectors (in FE DoFs)
-        # self.cp_funcs_list      = [[] for i in range(self.nsd)]
-        # self.cp_funcs_nest      = [None for i in range(self.nsd)]
-        # for field in range(self.nsd):
-        #     for s_ind in range(self.num_splines):
-        #         self.cp_funcs_list[field] += [v2p(self.splines[s_ind].
-        #                                       cpFuncs[field].vector()),]
-        #     self.cp_funcs_nest[field] = create_nest_PETScVec(
-        #                                 self.cp_funcs_list[field],
-        #                                 comm=self.comm)
-
+        # Create nested control points in IGA DoFs
+        self.cp_iga_nest = self.vec_scalar_iga_nest.copy()
         # Set initial control points in IGA DoFs as None
         self.init_cp_iga = None
 
-        # Initial attributes for element sizes
-        self.init_cpfuncs_list  = [[] for s_ind in range(self.num_splines)]
-        self.hl_phy             = [] # Physical element length
-        self.ha_phy             = [] # Physical element area
-        self.hl_phy_linear      = [] # Physical element length in linear space
-        self.ha_phy_linear      = [] # Physical element area in linear space
+        if self.opt_thickness:
+            if var_thickness:
+                self.h_th_fe_list = [v2p(h_th.vector()) for h_th in self.h_th]
+                self.h_th_fe_nest = create_nest_PETScVec(self.h_th_fe_list,
+                                                         comm=self.comm)
+                self.h_th_iga_nest = self.vec_scalar_iga_nest.copy()
+                self.init_h_th_fe = get_petsc_vec_array(self.h_th_fe_nest,
+                                                        comm=self.comm)
+                self.h_th_sizes = [h_th_fe_sub.getSizes()[1] for h_th_fe_sub in
+                                   self.h_th_fe_list]
+                self.init_h_th_iga = None
+            else:
+                # Create nested thickness vector
+                self.h_th_vec_list = [v2p(h_th.vector()) for h_th in self.h_th]
+                self.h_th_nest = create_nest_PETScVec(self.h_th_vec_list,
+                                                      comm=self.comm)
+                self.h_th_dof = self.h_th_nest.getSizes()[1]
+                self.h_th_sizes = [h_th_sub.getSizes()[1] for h_th_sub in 
+                                   self.h_th_vec_list]
+                self.init_h_th_list = [get_petsc_vec_array(h_th_sub, 
+                                       comm=self.comm) for h_th_sub in
+                                       self.h_th_vec_list]
+                self.init_h_th = get_petsc_vec_array(self.h_th_nest, 
+                                                     comm=self.comm)
 
+        # Initial attributes
+        self.init_cpfuncs_list = [[] for s_ind in range(self.num_splines)]
+        self.hl_phy = []
+        # self.h_phy_linear = []
+        # self.h_phy_avg = []
+        self.ha_phy = []
+        self.ha_phy_linear = []
+        self.hl_phy_linear = []
         for s_ind in range(self.num_splines):
             for field in range(self.nsd+1):
-                self.init_cpfuncs_list[s_ind] += \
-                                     [Function(self.splines[s_ind].V_control)]
-                self.init_cpfuncs_list[s_ind][field].assign(
-                                      self.splines[s_ind].cpFuncs[field])
+                self.init_cpfuncs_list[s_ind] += [Function(self.splines[s_ind].V_control)]
+                self.init_cpfuncs_list[s_ind][field].assign(self.splines[s_ind].cpFuncs[field])
             self.hl_phy += [spline_mesh_size(self.splines[s_ind])]
             self.ha_phy += [spline_mesh_area(self.splines[s_ind])]
             self.hl_phy_linear += [self.splines[s_ind].\
-                                projectScalarOntoLinears(self.hl_phy[s_ind])] 
+                                   projectScalarOntoLinears(self.hl_phy[s_ind])] 
             self.ha_phy_linear += [self.splines[s_ind].\
-                                projectScalarOntoLinears(self.ha_phy[s_ind])]
+                                   projectScalarOntoLinears(self.ha_phy[s_ind])]
 
-    def set_geom_preprocessor(self, preprocessor):
-        """
-        Set geometric processor
-        """
-        self.preprocessor = preprocessor
-        self.cp_shapes = [surf_data.control.shape[0:2] for surf_data 
-                         in self.preprocessor.BSpline_surfs_data]
-        if self.preprocessor.reparametrize:
-            self.cp_shapes = [surf_data.control.shape[0:2] for surf_data 
-                         in self.preprocessor.BSpline_surfs_repara_data]
-        if self.preprocessor.refine:
-            self.cp_shapes = [surf_data.control.shape[0:2] for surf_data 
-                         in self.preprocessor.BSpline_surfs_refine_data]
-
-
-    #######################################################
-    ######## Shape optimization setup methods #############
-    #######################################################
-
-    def set_shopt_surf_inds(self, opt_field, shopt_surf_inds):
-        self.opt_shape = True
-        self.opt_field = opt_field
-        self.shopt_surf_inds = shopt_surf_inds
-
-        assert len(opt_field) == len(shopt_surf_inds)
-        
-        self.shopt_num_desvars = [0 for field in self.opt_field]
-        
-        # # Create nested control points in IGA DoFs
-        self.cpdes_iga_list    = [[] for i in range(len(self.opt_field))]
-        self.cpdes_iga_nest    = [None for i in range(len(self.opt_field))]
-        # Create nested cpFuncs vectors (in FE DoFs)
-        self.cpdes_fe_list     = [[] for i in range(len(self.opt_field))]
-        self.cpdes_fe_nest     = [None for i in range(len(self.opt_field))]
-
-        self.cpdes_iga_dofs_full_list    = [[] for i in range(len(self.opt_field))]
-
-        for i, field in enumerate(self.opt_field):
-            ind_off = 0
-            for s_ind in self.shopt_surf_inds[i]:
-                self.shopt_num_desvars[i] += self.vec_scalar_iga_dof_list[s_ind]
-                self.cpdes_iga_list[i] += [self.vec_scalar_iga_list[s_ind]]
-                self.cpdes_fe_list[i] += [v2p(self.splines[s_ind].
-                                              cpFuncs[field].vector()),]
-                self.cpdes_iga_dofs_full_list[i] += [list(range(ind_off, 
-                    ind_off+self.vec_scalar_iga_dof_list[s_ind]))]
-                ind_off += self.vec_scalar_iga_dof_list[s_ind]
-            self.cpdes_iga_nest[i] = create_nest_PETScVec(
-                                     self.cpdes_iga_list[i], comm=self.comm)
-            self.cpdes_fe_nest[i] = create_nest_PETScVec(
-                                    self.cpdes_fe_list[i], comm=self.comm)
-
-        self.cpdes_iga_dofs = [[[dof for dof in subdof] 
-                              for subdof in subdof_subfield] 
-                              for subdof_subfield in self.cpdes_iga_dofs_full_list]
-        self.cpdes_iga_dofs_full = [np.concatenate(dof_list) for dof_list 
-                                    in self.cpdes_iga_dofs_full_list]
-
-        # Initialize pin dofs
-        self.shopt_pin_dofs = [[] for i in range(len(self.opt_field))]
-
-        self.dcps_iga_list = [[] for field in self.opt_field]
-        self.dcps_iga = [None for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-                self.dcps_iga_list[field_ind] += [self.vec_scalar_iga_list[s_ind]]
-            self.dcps_iga[field_ind] = create_nest_PETScVec(
-                self.dcps_iga_list[field_ind], comm=self.comm)
+            # self.h_phy_linear += [self.splines[s_ind].\
+            #                       projectScalarOntoLinears(self.h_phy[s_ind])]
+            # self.h_phy_avg += [np.average(self.h_phy_linear[s_ind].vector().get_local())]
 
     def set_init_CPIGA(self, cp_iga):
         """
@@ -285,192 +238,20 @@ class NonMatchingOpt(NonMatchingCoupling):
         return self.init_cp_iga
 
     def solve_init_CPIGA(self):
-        init_cp_iga = [None for i in range(len(self.opt_field))]
-        init_cp_iga_list = [[] for i in range(len(self.opt_field))]
-        for i, field in enumerate(self.opt_field):
-            for j, s_ind in enumerate(self.shopt_surf_inds[i]):
-                cp_fe = self.cpdes_fe_list[i][j]
+        init_cp_iga = [None for i in range(self.nsd)]
+        init_cp_iga_list = [[] for i in range(self.nsd)]
+        for field in range(self.nsd):
+            for s_ind in range(self.num_splines):
+                cp_fe = self.cp_funcs_list[field][s_ind]
                 Mc = m2p(self.splines[s_ind].M_control)
                 McTMc = Mc.transposeMatMult(Mc)
                 McTcp_fe = AT_x(Mc, cp_fe)
                 cp_iga = solve_Ax_b(McTMc, McTcp_fe)
-                init_cp_iga_list[i] += [get_petsc_vec_array(cp_iga, 
+                init_cp_iga_list[field] += [get_petsc_vec_array(cp_iga, 
                                             comm=self.comm)]
-            init_cp_iga[i] = np.concatenate(init_cp_iga_list[i])
+            init_cp_iga[field] = np.concatenate(init_cp_iga_list[field])
+        init_cp_iga = np.array(init_cp_iga).T
         return init_cp_iga
-
-    ## CP constraints
-    def set_shopt_align_CP(self, align_surf_inds=[], align_dir=[]):
-        """
-        Set surface control points alignment with surfaces indices
-        ``align_surf_inds`` in direction ``align_dir``.
-
-        Parameters
-        ----------
-        align_surf_inds : list of list of inds
-            len(align_surf_inds) == len(opt_field)
-        align_dir : list of list of inds, align_dir[i][j] in {0,1}
-            len(align_dir) == len(opt_field)
-            len(align_surf_inds[i]) == len(align_dir[i])
-        """
-        assert len(align_surf_inds) == len(self.opt_field)
-        assert len(align_dir) == len(self.opt_field)
-        # cp_shapes = self.cpiga2xi.cp_shapes
-        cp_sizes = self.vec_scalar_iga_dof_list
-        self.align_surf_inds = align_surf_inds
-        self.align_dir = align_dir
-
-        self.align_cp_deriv_list = [[] for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            for s_ind in self.shopt_surf_inds[field_ind]:
-                self.align_cp_deriv_list[field_ind] += [np.eye(cp_sizes[s_ind])]
-
-        for field_ind, field in enumerate(self.opt_field):
-            ind_off = 0
-            if self.align_surf_inds[field_ind] is not None:
-                for align_ind, s_ind in enumerate(self.align_surf_inds[field_ind]):
-                    if s_ind not in self.shopt_surf_inds[field_ind]:
-                        raise ValueError(f"Aligned surface {s_ind} is not optimized.")
-                    num_col, num_row = self.cp_shapes[s_ind]
-                    opt_surf_ind = self.shopt_surf_inds[field_ind].index(s_ind)
-                    self.shopt_num_desvars[field_ind] \
-                        -= self.vec_scalar_iga_dof_list[s_ind]
-
-                    if self.align_dir[field_ind][align_ind] == 0:
-                        self.shopt_num_desvars[field_ind] += num_row
-                        deriv_mat = np.zeros((cp_sizes[s_ind], num_row))
-                        for row_ind in range(num_row):
-                            deriv_mat[num_col*row_ind:num_col*(row_ind+1), 
-                                      row_ind] = 1.
-                        self.align_cp_deriv_list[field_ind][align_ind] = deriv_mat
-                        dofs_full = self.cpdes_iga_dofs_full_list[field_ind][opt_surf_ind]
-                        self.cpdes_iga_dofs[field_ind][opt_surf_ind] =  \
-                            dofs_full[0:cp_sizes[s_ind]:num_col]
-                    elif self.align_dir[field_ind][align_ind] == 1:
-                        self.shopt_num_desvars[field_ind] += num_col
-                        deriv_mat = np.zeros((cp_sizes[s_ind], num_col))
-                        for row_ind in range(num_row):
-                            deriv_mat[num_col*row_ind:num_col*(row_ind+1), 
-                                      :] = np.eye(num_col)
-                        self.align_cp_deriv_list[field_ind][align_ind] = deriv_mat
-                        dofs_full = self.cpdes_iga_dofs_full_list[field_ind][opt_surf_ind]
-                        self.cpdes_iga_dofs[field_ind][opt_surf_ind] =  \
-                            dofs_full[0:num_col]
-                    else:
-                        raise ValueError("Undefined direction: {}"
-                                         .format(self.align_dir[align_ind]))
-            self.cpdes_iga_dofs[field_ind] = np.concatenate(self.cpdes_iga_dofs[field_ind])
-
-        self.init_cp_iga_design = [None for field in self.opt_field]
-        self.shopt_dcpaligndcpsurf = [None for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            self.shopt_dcpaligndcpsurf[field_ind] = coo_matrix(
-                block_diag(*self.align_cp_deriv_list[field_ind]))
-            self.init_cp_iga_design[field_ind] = \
-                self.init_cp_iga[field_ind][self.cpdes_iga_dofs[field_ind]]
-        return self.shopt_dcpaligndcpsurf
-
-    def set_shopt_pin_CP(self, pin_surf_inds=[], pin_dir=[], pin_side=[], 
-                         pin_dofs=None, pin_vals=None):
-        """
-        len(pin_surf_inds) == len(self.opt_field)
-        """
-        if pin_dofs is None:
-            assert len(pin_surf_inds) == len(self.opt_field)
-            assert len(pin_dir) == len(self.opt_field)
-            assert len(pin_side) == len(self.opt_field)
-            self.pin_surf_inds = pin_surf_inds
-            self.pin_dir = pin_dir
-            self.pin_side = pin_side
-
-            # cp_shapes = self.cpiga2xi.cp_shapes
-            cp_sizes = self.vec_scalar_iga_dof_list
-
-            for field_ind, field in enumerate(self.opt_field):
-                for pin_ind, s_ind in enumerate(self.pin_surf_inds[field_ind]):
-                    if s_ind not in self.shopt_surf_inds[field_ind]:
-                        raise ValueError(f"Pinned surface {s_ind} is not optimized.")
-                    opt_surf_ind = self.shopt_surf_inds[field_ind].index(s_ind)
-                    num_col, num_row = self.cp_shapes[s_ind]
-                    dofs_full = self.cpdes_iga_dofs_full_list[field_ind][opt_surf_ind]
-                    if self.pin_dir[field_ind][pin_ind] == 0:
-                        if self.pin_side[field_ind][pin_ind] == 0:
-                            local_pin_dof = list(range(0, cp_sizes[s_ind], num_col))
-                        elif self.pin_side[field_ind][pin_ind] == 1:
-                            local_pin_dof = list(range(num_col-1, cp_sizes[s_ind], num_col))
-                    elif self.pin_dir[field_ind][pin_ind] == 1:
-                        if self.pin_side[field_ind][pin_ind] == 0:
-                            local_pin_dof = list(range(0, num_col))
-                        elif self.pin_side[field_ind][pin_ind] == 1:
-                            local_pin_dof = list(range(cp_sizes[s_ind]-num_col, cp_sizes[s_ind]))
-                    else:
-                        raise ValueError("Undefined direction: {}"
-                                         .format(self.align_dir[align_ind]))
-                    opt_pin_dofs = [dofs_full[local_dof_ind] for local_dof_ind in local_pin_dof]
-
-                    self.shopt_pin_dofs[field_ind] += [pin_dof for pin_dof in opt_pin_dofs 
-                                                    if pin_dof in self.cpdes_iga_dofs[field_ind]]
-                    # print("field ind:", field_ind)                   
-                    # print(opt_pin_dofs)
-                    # print(self.shopt_pin_dofs[field_ind])
-        else:
-            self.shopt_pin_dofs = pin_dofs
-
-        if shopt_pin_vals is None:
-            self.shopt_pin_vals = []
-            for field_ind, field in enumerate(self.opt_field):
-                self.shopt_pin_vals += [self.init_cp_iga[field_ind]
-                                  [self.shopt_pin_dofs[field_ind]]]
-        else:
-            self.shopt_pin_vals = shopt_pin_vals
-
-        self.shopt_dcppindcpsurf = [None for field in self.opt_field]
-        for field_ind, field in enumerate(self.opt_field):
-            partial_mat = np.zeros((len(self.shopt_pin_dofs[field_ind]), 
-                                    len(self.cpdes_iga_dofs[field_ind])))
-            for pin_ind in range(len(self.shopt_pin_dofs[field_ind])):
-                col_ind = np.where(self.cpdes_iga_dofs[field_ind]
-                        ==self.shopt_pin_dofs[field_ind][pin_ind])[0][0]
-                partial_mat[pin_ind, col_ind] = 1.
-            self.shopt_dcppindcpsurf[field_ind] = coo_matrix(partial_mat)
-        return self.shopt_dcppindcpsurf
-
-
-    #######################################################
-    ######## Thickness optimization setup methods #########
-    #######################################################
-
-    def set_thickness_opt(self, var_thickness=False):
-        self.opt_thickness = True
-        self.var_thickness = var_thickness
-
-        if var_thickness:
-            self.h_th_fe_list = [v2p(h_th.vector()) for h_th in self.h_th]
-            self.h_th_fe_nest = create_nest_PETScVec(self.h_th_fe_list,
-                                                     comm=self.comm)
-            self.h_th_iga_nest = self.vec_scalar_iga_nest.copy()
-            self.init_h_th_fe = get_petsc_vec_array(self.h_th_fe_nest,
-                                                    comm=self.comm)
-            self.h_th_sizes = [h_th_fe_sub.getSizes()[1] for h_th_fe_sub in
-                               self.h_th_fe_list]
-            self.init_h_th_iga = None
-        else:
-            # Create nested thickness vector
-            self.h_th_vec_list = [v2p(h_th.vector()) for h_th in self.h_th]
-            self.h_th_nest = create_nest_PETScVec(self.h_th_vec_list,
-                                                  comm=self.comm)
-            self.h_th_dof = self.h_th_nest.getSizes()[1]
-            self.h_th_sizes = [h_th_sub.getSizes()[1] for h_th_sub in 
-                               self.h_th_vec_list]
-            self.init_h_th_list = [get_petsc_vec_array(h_th_sub, 
-                                   comm=self.comm) for h_th_sub in
-                                   self.h_th_vec_list]
-            self.init_h_th = get_petsc_vec_array(self.h_th_nest, 
-                                                 comm=self.comm)
-
-    #######################################################
-    ######## Derivatives computatoin ######################
-    #######################################################
 
     def mortar_dRmdCPm_symexp(self, field):
         """
@@ -504,7 +285,6 @@ class NonMatchingOpt(NonMatchingCoupling):
     def set_residuals(self, residuals, residuals_deriv=None):
         NonMatchingCoupling.set_residuals(self, residuals, residuals_deriv)
         if self.opt_shape:
-            print("set residuals....")
             dR_dcp_ufl_symexp = [[] for field in self.opt_field]
             for i, field in enumerate(self.opt_field):
                 for s_ind in range(self.num_splines):
@@ -559,8 +339,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         Update splines' control point functions with input array
         in FE DoFs
         """
-        update_nest_vec(cp_array_fe, self.cpdes_fe_nest[
-                        self.opt_field.index(field)], 
+        update_nest_vec(cp_array_fe, self.cp_funcs_nest[field], 
                         comm=self.comm)
 
     def update_CPIGA(self, cp_array_iga, field):
@@ -568,12 +347,10 @@ class NonMatchingOpt(NonMatchingCoupling):
         Update splines' control point functions with input array
         in IGA DoFs
         """
-        field_ind = self.opt_field.index(field)
-        update_nest_vec(cp_array_iga, self.cpdes_iga_nest[field_ind], 
-                        comm=self.comm)
-        cp_iga_sub = self.cpdes_iga_nest[field_ind].getNestSubVecs()
-        for i, s_ind in enumerate(self.shopt_surf_inds[field_ind]):
-            self.vec_scalar_IGA2FE(cp_iga_sub[i],
+        update_nest_vec(cp_array_iga, self.cp_iga_nest, comm=self.comm)
+        cp_iga_sub = self.cp_iga_nest.getNestSubVecs()
+        for s_ind in range(self.num_splines):
+            self.vec_scalar_IGA2FE(cp_iga_sub[s_ind],
                  v2p(self.splines[s_ind].cpFuncs[field].vector()), s_ind)
 
     def update_h_th_FE(self, h_th_fe_array):
@@ -601,96 +378,28 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         update_nest_vec(h_th_array, self.h_th_nest, comm=self.comm)
 
-    # def set_diff_intersections(self, preprocessor):
-    #     """
-    #     This function is noly needed when differentiating intersections'
-    #     parametric coordiantes, and requires the class ``CPIGA2Xi``
-    #     """
-    #     assert self.transfer_mat_deriv == 2
-    #     self.preprocessor = preprocessor
-    #     self.cpiga2xi = CPIGA2Xi(preprocessor, self.shopt_surf_inds, self.opt_field)
-    #     self.diff_int_inds = self.preprocessor.diff_int_inds
-    #     self.Vms_2dim = [VectorFunctionSpace(
-    #                      self.mortar_meshes[diff_int_ind], 'CG', 1)
-    #                      for diff_int_ind in self.diff_int_inds]
-    #     self.xi_funcs = []
-    #     self.xi_vecs = []
-    #     for i, diff_int_ind in enumerate(self.diff_int_inds):
-    #         self.xi_funcs += [Function(self.Vms_2dim[i]),
-    #                           Function(self.Vms_2dim[i])]
-    #         self.xi_vecs += [v2p(self.xi_funcs[-2].vector()),
-    #                          v2p(self.xi_funcs[-1].vector())]
-    #     self.xi_nest = create_nest_PETScVec(self.xi_vecs, comm=self.comm)
-    #     self.update_xi(self.cpiga2xi.xi_flat_global)
-    #     self.xi_size = self.cpiga2xi.xi_size_global
-
-    # def get_diff_intersections_edge_cons_info(self):
-    #     """
-    #     Return the dofs and values for edge intersections.
-    #     """
-    #     int_edge_cons_dofs_list = []
-    #     int_edge_cons_vals_list = []
-    #     for i, diff_int_ind in enumerate(self.diff_int_inds):
-    #         int_type = self.preprocessor.intersections_type[diff_int_ind]
-    #         print("int_type:", int_type)
-    #         # if 'surf' not in int_type:
-    #         if int_type[0] == 'surf-edge' or int_type[0] == 'edge_surf':
-    #             edge_indicator = self.preprocessor.diff_int_edge_cons[i]
-    #             side = int(edge_indicator[edge_indicator.index('-')-1])
-    #             para_dir = int(edge_indicator[edge_indicator.index('-')+1])
-    #             edge_val = int(edge_indicator[edge_indicator.index('.')+1])
-    #             if side == 0:
-    #                 start_ind = self.cpiga2xi.xi_flat_inds[i]
-    #                 end_ind = int((self.cpiga2xi.xi_flat_inds[i]
-    #                           +self.cpiga2xi.xi_flat_inds[i+1])/2)
-    #             elif side == 1:
-    #                 start_ind = int((self.cpiga2xi.xi_flat_inds[i]
-    #                           +self.cpiga2xi.xi_flat_inds[i+1])/2)
-    #                 end_ind = self.cpiga2xi.xi_flat_inds[i+1]
-    #             else:
-    #                 raise ValueError("Unknown side value: {}".format(side))
-    #             if para_dir == 1:
-    #                 start_ind += 1
-    #             cons_dofs_temp = np.arange(start_ind, end_ind, self.npd)
-    #             cons_vals_temp = np.ones(cons_dofs_temp.size)*edge_val
-    #             int_edge_cons_dofs_list += [cons_dofs_temp]
-    #             int_edge_cons_vals_list += [cons_vals_temp]
-    #     self.int_edge_cons_dofs = np.concatenate(int_edge_cons_dofs_list, 
-    #                                              dtype='int32')
-    #     self.int_edge_cons_vals = np.concatenate(int_edge_cons_vals_list)
-
-    #     self.int_xi_free_dofs = []
-    #     for i in range(self.cpiga2xi.xi_size_global):
-    #         if i not in self.int_edge_cons_dofs:
-    #             self.int_xi_free_dofs += [i]
-                
-    #     return self.int_edge_cons_dofs, self.int_edge_cons_vals
-
-
-    def create_diff_intersections(self, num_edge_pts=None):
+    def set_xi_diff_info(self, preprocessor, int_indices_diff=None):
         """
-        This function is noly needed when differentiating intersections'
-        parametric coordiantes, and requires the class ``CPIGA2Xi``
+        This function is noly need when differentiating intersections'
+        parametric coordiantes, and require the class ``CPIGA2Xi``
         """
         assert self.transfer_mat_deriv == 2
-        self.cpiga2xi = CPIGA2Xi(self.preprocessor, self.shopt_surf_inds, 
-                                 self.opt_field, num_edge_pts)
-        self.diff_int_inds = self.preprocessor.diff_int_inds
+        self.cpiga2xi = CPIGA2Xi(preprocessor, int_indices_diff, self.opt_field)
+        self.int_indices_diff = self.cpiga2xi.int_indices_diff
         self.Vms_2dim = [VectorFunctionSpace(
-                         self.mortar_meshes[diff_int_ind], 'CG', 1)
-                         for diff_int_ind in self.diff_int_inds]
+                         self.mortar_meshes[int_ind_global], 'CG', 1)
+                         for int_ind_global in self.int_indices_diff]
         self.xi_funcs = []
         self.xi_vecs = []
-        for i, diff_int_ind in enumerate(self.diff_int_inds):
-            self.xi_funcs += [Function(self.Vms_2dim[i]),
-                              Function(self.Vms_2dim[i])]
+        for int_ind, int_ind_global in enumerate(self.int_indices_diff):
+            self.xi_funcs += [Function(self.Vms_2dim[int_ind]),
+                              Function(self.Vms_2dim[int_ind])]
             self.xi_vecs += [v2p(self.xi_funcs[-2].vector()),
                              v2p(self.xi_funcs[-1].vector())]
         self.xi_nest = create_nest_PETScVec(self.xi_vecs, comm=self.comm)
-        self.update_xi(self.cpiga2xi.xi_flat_global)
         self.xi_size = self.cpiga2xi.xi_size_global
 
-    def update_xi_old(self, xi_flat):
+    def update_xi(self, xi_flat):
         """
         Update intersections' parametric coordinates
         """
@@ -708,7 +417,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         for i in range(num_sub_vecs):
             sub_array = xi_flat[array_ind_off+sub_vecs_range[i][0]: 
                                   array_ind_off+sub_vecs_range[i][1]]
-            sub_array = sub_array.reshape(-1, self.npd)
+            sub_array = sub_array.reshape(-1, self.para_dim)
             sub_array = sub_array[::-1].reshape(-1)
             sub_array_list += [sub_array,]
             array_ind_off += sub_vecs_size[i]
@@ -716,18 +425,11 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.xi_nest.setArray(nest_array)
         self.xi_nest.assemble()
 
-    def update_xi(self, xi_flat):
-        """
-        Update intersections' parametric coordinates
-        """
-        self.xi_nest.setArray(xi_flat)
-        self.xi_nest.assemble()
-
-    def update_transfer_matrices_sub(self, moartar_coords, index, side):
+    def update_transfer_matrices_sub(self, xi_func, index, side):
         """
         Update transfer matrices for single intersection on one side
         """
-        move_mortar_mesh(self.mortar_meshes[index], moartar_coords)
+        move_mortar_mesh(self.mortar_meshes[index], xi_func)
         self.transfer_matrices_list[index][side] = \
             create_transfer_matrix_list(self.splines[
             self.mapping_list[index][side]].V, 
@@ -752,15 +454,14 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         Update transfer matrices for all intersections
         """
-        for i, diff_int_ind in enumerate(self.diff_int_inds):
-            for side in range(self.npd):
-            # for side in [1,0]:
-                mortar_coords = v2p(self.xi_funcs[int(i*self.npd+side)].vector())\
-                                .array.reshape(-1,2)
-                self.update_transfer_matrices_sub(mortar_coords, diff_int_ind, side)
+        for int_ind, int_ind_global in enumerate(self.int_indices_diff):
+            for side in range(self.para_dim):
+                self.update_transfer_matrices_sub(
+                    self.xi_funcs[int(int_ind*self.para_dim+side)],
+                    int_ind_global, side)
 
     # def update_transfer_matrices(self):
-    #     for int_ind, int_ind_global in enumerate(self.diff_int_inds):
+    #     for int_ind, int_ind_global in enumerate(self.int_indices_diff):
     #         xi_flat_sub = xi_flat[self.cpiga2xi.xi_flat_inds[int_ind]:
     #                               self.cpiga2xi.xi_flat_inds[int_ind+1]]
     #         xi_coord_sub = xi_flat_sub.reshape(-1,2)
@@ -773,55 +474,46 @@ class NonMatchingOpt(NonMatchingCoupling):
     #             self.update_transfer_matrices_sub(mesh_coord,
     #                 int_ind_global, side)
 
-    def extract_nonmatching_vec(self, vec_list, ind_list=None,
-                                scalar=False, apply_bcs=False):
+    def extract_nonmatching_vec(self, vec_list, scalar=False, 
+                                apply_bcs=False):
         """
         Extract non-matching vector from FE to IGA DoFs
         """
-        if ind_list is None:
-            ind_list = list(range(self.num_splines))
         vec_iga_list = []
-        for i, s_ind in enumerate(ind_list):
+        for i in range(self.num_splines):
             if scalar:
-                M = m2p(self.splines[s_ind].M_control)
+                M = m2p(self.splines[i].M_control)
             else:
-                M = m2p(self.splines[s_ind].M)
+                M = m2p(self.splines[i].M)
             vec_iga_sub = AT_x(M, vec_list[i])
             # Only apply bcs to non-scalar field vectors
             if apply_bcs and not scalar:
-                apply_bcs_vec(self.splines[s_ind], vec_iga_sub)
+                apply_bcs_vec(self.splines[i], vec_iga_sub)
             vec_iga_list += [vec_iga_sub,]
         vec_iga = create_nest_PETScVec(vec_iga_list)
         return vec_iga
 
-    def extract_nonmatching_mat(self, mat_list, 
-                                left_ind_list=None, right_ind_list=None, 
-                                ext_right=True,
+    def extract_nonmatching_mat(self, mat_list, ext_right=True,
                                 left_scalar=False, right_scalar=False, 
-                                apply_row_bcs=False, apply_col_bcs=False,
-                                diag=1):
+                                apply_row_bcs=False, apply_col_bcs=False):
         """
         Extract non-matching matrix from FE to IGA DoFs.
         """
-        if left_ind_list is None:
-            left_ind_list = list(range(self.num_splines))
-        if right_ind_list is None:
-            right_ind_list = list(range(self.num_splines))
         mat_iga_list = []
-        for i, s_ind0 in enumerate(left_ind_list):
+        for i in range(self.num_splines):
             mat_iga_list += [[],]
-            for j, s_ind1 in enumerate(right_ind_list):
+            for j in range(self.num_splines):
                 if mat_list[i][j] is not None:
                     # Extract matrix
                     if left_scalar:
-                        M_left = m2p(self.splines[s_ind0].M_control)
+                        M_left = m2p(self.splines[i].M_control)
                     else:
-                        M_left = m2p(self.splines[s_ind0].M)
+                        M_left = m2p(self.splines[i].M)
                     if ext_right:
                         if right_scalar:
-                            M_right = m2p(self.splines[s_ind1].M_control)
+                            M_right = m2p(self.splines[j].M_control)
                         else:
-                            M_right = m2p(self.splines[s_ind1].M)
+                            M_right = m2p(self.splines[j].M)
                         mat_iga_temp = AT_R_B(M_left, mat_list[i][j], M_right)
                     else:
                         mat_iga_temp = M_left.transposeMatMult(mat_list[i][j])
@@ -829,27 +521,23 @@ class NonMatchingOpt(NonMatchingCoupling):
                     # Only these two conditions are considered
                     if apply_row_bcs and apply_col_bcs:
                         if i == j:
-                            mat_iga_temp = apply_bcs_mat(self.splines[s_ind0],
-                                           mat_iga_temp, diag=diag)
+                            mat_iga_temp = apply_bcs_mat(self.splines[i],
+                                           mat_iga_temp, diag=1)
                         else:
-                            mat_iga_temp = apply_bcs_mat(self.splines[s_ind0],
-                                           mat_iga_temp, self.splines[s_ind1], 
+                            mat_iga_temp = apply_bcs_mat(self.splines[i],
+                                           mat_iga_temp, self.splines[j], 
                                            diag=0)
                     elif apply_row_bcs and not apply_col_bcs:
                         if i == j:
-                            diag = diag
+                            diag = 1
                         else:
                             diag=0
-                        mat_iga_temp.zeroRows(self.splines[s_ind0].zeroDofs,
+                        mat_iga_temp.zeroRows(self.splines[i].zeroDofs,
                                               diag=diag)
                 else:
                     mat_iga_temp = None
 
                 mat_iga_list[i] += [mat_iga_temp,]
-
-        # print('='*50, mat_iga_list)
-
-        self.mat_iga_list = mat_iga_list
 
         mat_iga = create_nest_PETScMat(mat_iga_list, comm=self.comm)
 
@@ -977,7 +665,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                                 dRt_dut_FE[i][j] = Kcs[i][j]
         return dRt_dut_FE
 
-    def assemble_dRFEdCPFE(self, ind_list, field):
+    def assemble_dRFEdCPFE(self, field):
         """
         Derivatives of non-matching residual w.r.t. displacements in
         FE DoFs.
@@ -985,84 +673,45 @@ class NonMatchingOpt(NonMatchingCoupling):
         # Compute contributions from shell residuals and derivatives
         field_ind = self.opt_field.index(field)
         dR_dcp_FE = []
-        for i, s_ind in enumerate(ind_list):
-            dR_dcp_assemble = assemble(self.dR_dcp_symexp[field_ind][s_ind])
+        for i in range(self.num_splines):
+            dR_dcp_assemble = assemble(self.dR_dcp_symexp[field_ind][i])
             dR_dcp_FE += [m2p(dR_dcp_assemble),]
 
         ## Step 2: assemble non-matching contributions
         # Create empty lists for non-matching contributions
-        dRm_dcpm_FE = [[None for i1 in range(len(ind_list))] 
+        dRm_dcpm_FE = [[None for i1 in range(self.num_splines)] 
                              for i2 in range(self.num_splines)]
 
         # Compute non-matching contributions ``dRm_dcpm_FE``.
         for i in range(self.num_intersections):
-            s_ind0, s_ind1 = self.mapping_list[i]
-            if s_ind0 in ind_list or s_ind1 in ind_list:
-                dRm_dcpm = transfer_dRmdcpm_sub(
-                           self.dRm_dcpm_list[field_ind][i],  
-                           self.transfer_matrices_list[i],
-                           self.transfer_matrices_control_list[i])
-                if s_ind0 in ind_list:
-                    s_opt_ind0 = ind_list.index(s_ind0)
-                    if dRm_dcpm_FE[s_ind0][s_opt_ind0] is not None:
-                        dRm_dcpm_FE[s_ind0][s_opt_ind0] += dRm_dcpm[0][0]
+            dRm_dcpm = transfer_dRmdcpm_sub(self.dRm_dcpm_list[field_ind][i],  
+                       self.transfer_matrices_list[i],
+                       self.transfer_matrices_control_list[i])
+            for j in range(len(dRm_dcpm)):
+                for k in range(len(dRm_dcpm[j])):
+                    if dRm_dcpm_FE[self.mapping_list[i][j]]\
+                       [self.mapping_list[i][k]] is not None:
+                        dRm_dcpm_FE[self.mapping_list[i][j]]\
+                            [self.mapping_list[i][k]] += dRm_dcpm[j][k]
                     else:
-                        dRm_dcpm_FE[s_ind0][s_opt_ind0] = dRm_dcpm[0][0]
-                    if dRm_dcpm_FE[s_ind1][s_opt_ind0] is not None:
-                        dRm_dcpm_FE[s_ind1][s_opt_ind0] += dRm_dcpm[1][0]
-                    else:
-                        dRm_dcpm_FE[s_ind1][s_opt_ind0] = dRm_dcpm[1][0]
-                if s_ind1 in ind_list:
-                    s_opt_ind1 = ind_list.index(s_ind1)
-                    if dRm_dcpm_FE[s_ind0][s_opt_ind1] is not None:
-                        dRm_dcpm_FE[s_ind0][s_opt_ind1] += dRm_dcpm[0][1]
-                    else:
-                        dRm_dcpm_FE[s_ind0][s_opt_ind1] = dRm_dcpm[0][1]
-                    if dRm_dcpm_FE[s_ind1][s_opt_ind1] is not None:
-                        dRm_dcpm_FE[s_ind1][s_opt_ind1] += dRm_dcpm[1][1]
-                    else:
-                        dRm_dcpm_FE[s_ind1][s_opt_ind1] = dRm_dcpm[1][1]
+                        dRm_dcpm_FE[self.mapping_list[i][j]]\
+                            [self.mapping_list[i][k]] = dRm_dcpm[j][k]
 
         ## Step 3: add derivatives from splines and mortar meshes together
-        dRt_dcp_FE = [[None for i1 in range(len(ind_list))] 
+        dRt_dcp_FE = [[None for i1 in range(self.num_splines)] 
                             for i2 in range(self.num_splines)]
-        for i, s_ind0 in enumerate(list(range(self.num_splines))):
-            for j, s_ind1 in enumerate(ind_list):                
-                if s_ind0 == s_ind1:
-                    if dRm_dcpm_FE[i][j] is not None:
-                        dRt_dcp_FE[i][j] = dR_dcp_FE[j] + dRm_dcpm_FE[i][j]
+        for i in range(self.num_splines):
+            for j in range(self.num_splines):
+                if i == j:
+                    if dRm_dcpm_FE[i][i] is not None:
+                        dRt_dcp_FE[i][i] = dR_dcp_FE[i] + dRm_dcpm_FE[i][i]
                     else:
-                        dRt_dcp_FE[i][j] = dR_dcp_FE[j]
+                        dRt_dcp_FE[i][i] = dR_dcp_FE[i]
                 else:
                     dRt_dcp_FE[i][j] = dRm_dcpm_FE[i][j]
-
-        for i, s_ind0 in enumerate(list(range(self.num_splines))):
-            if dRt_dcp_FE[i].count(None) == len(dRt_dcp_FE[i]):
-                temp_mat = m2p(assemble(self.dR_dcp_symexp[field_ind][s_ind0]))
-                row_sizes = temp_mat.getSizes()[0]
-                if i == 0:
-                    row_ind = 1
-                else:
-                    row_ind = 0
-                col_sizes = dRt_dcp_FE[row_ind][0].getSizes()[1]
-                zero_mat = zero_petsc_mat(row_sizes, col_sizes, 
-                           PREALLOC=100, comm=self.comm)
-                dRt_dcp_FE[s_ind0][0] = zero_mat
-
-
-        if len(ind_list) == 1:
-            for s_ind in range(self.num_splines):
-                if dRt_dcp_FE[s_ind][0] is None:
-                    temp_mat = m2p(assemble(self.dR_dcp_symexp[field_ind][s_ind]))
-                    row_sizes = temp_mat.getSizes()[0]
-                    col_sizes = dRt_dcp_FE[0][0].getSizes()[1]
-                    zero_mat = zero_petsc_mat(row_sizes, col_sizes, 
-                               PREALLOC=100, comm=self.comm)
-                    dRt_dcp_FE[s_ind][0] = zero_mat
-
         return dRt_dcp_FE
 
-    def assemble_dRFEdh_th(self):
+    def assemble_RFEdh_th(self):
         """
         Derivatives of non-matching residual w.r.t. shell thickness
         in FE DoFs.
@@ -1100,44 +749,20 @@ class NonMatchingOpt(NonMatchingCoupling):
         Return the derivative of non-matching residual in IGA DoFs
         w.r.t. control points in FE DoFs.
         """
-        ind_list = self.shopt_surf_inds[self.opt_field.index(field)]
-        dRdcp_FE = self.assemble_dRFEdCPFE(ind_list, field)
+        dRdcp_FE = self.assemble_dRFEdCPFE(field)
         dRIGAdcp_funcs = self.extract_nonmatching_mat(dRdcp_FE, 
-                         right_ind_list=ind_list,
-                         ext_right=False, 
-                         apply_col_bcs=False, apply_row_bcs=True, diag=0)
+                         ext_right=False, apply_col_bcs=False)
         return dRIGAdcp_funcs
-
-
-    def dRIGAdCPIGA_FD(self, CP, field, h=1e-8):
-        self.update_CPIGA(CP, field)
-        R_init = self.RIGA().array
-
-        self.dRigadcpiga_FD = np.zeros((R_init.size, CP.size))
-        cp_init = CP.copy()
-
-        for cp_ind, cpi in enumerate(CP):
-            perturb = np.zeros(CP.size)
-            perturb[cp_ind] = h
-            cp_perturb = cp_init + perturb
-            self.update_CPIGA(cp_perturb, field)
-            R_perturb = self.RIGA().array
-            R_diff = R_perturb - R_init
-            self.dRigadcpiga_FD[:,cp_ind] = R_diff/h
-        return self.dRigadcpiga_FD
 
     def dRIGAdCPIGA(self, field):
         """
         Return the derivative of non-matching residual in IGA DoFs
         w.r.t. control points in IGA DoFs.
         """
-        ind_list = self.shopt_surf_inds[self.opt_field.index(field)]
-        dRdcp_FE = self.assemble_dRFEdCPFE(ind_list, field)
+        dRdcp_FE = self.assemble_dRFEdCPFE(field)
         dRIGAdcp_IGA = self.extract_nonmatching_mat(dRdcp_FE, 
-                         right_ind_list=ind_list,
                          ext_right=True, right_scalar=True, 
-                         apply_col_bcs=False, apply_row_bcs=True,
-                         diag=0)
+                         apply_col_bcs=False)
         return dRIGAdcp_IGA
 
     def dRIGAdh_th(self):
@@ -1145,64 +770,30 @@ class NonMatchingOpt(NonMatchingCoupling):
         Return the derivative of non-matching residual in IGA DoFs
         w.r.t. shell thickness in IGA DoFs.
         """
-        dRFEdh_th = self.assemble_dRFEdh_th()
+        dRFEdh_th = self.assemble_RFEdh_th()
         dRIGAdh_th_mat = self.extract_nonmatching_mat(dRFEdh_th,
                          ext_right=self.var_thickness, right_scalar=True, 
                          apply_col_bcs=False)
         return dRIGAdh_th_mat
 
-
-    def dRIGAdxi_FD(self, xi_flat, h=1e-8):
-
-        xi_init = xi_flat.copy()
-        self.update_xi(xi_init)
-        self.update_transfer_matrices()
-        R_init = self.RIGA().array
-
-        self.dRigadxi_FD = np.zeros((R_init.size, xi_flat.size))
-
-        for xi_ind, xi in enumerate(xi_flat):
-            print("Computing FD dRIGAdxi, column: {} out of {}".format(xi_ind, xi_flat.size))
-            perturb = np.zeros(xi_flat.size)
-            perturb[xi_ind] = h
-            xi_perturb = xi_init + perturb
-            self.update_xi(xi_perturb)
-            self.update_transfer_matrices()
-            R_perturb = self.RIGA().array
-            R_diff = R_perturb - R_init
-
-            self.dRigadxi_FD[:,xi_ind] = R_diff/h
-
-        return self.dRigadxi_FD
-
-    # def dRIGAdxi(self, diff_int_inds=None):
+    # def dRIGAdxi(self, int_indices_diff=None):
     def dRIGAdxi(self):
         """
         Reserved for shape optimization with moving intersections
         """
         num_sides = 2
         dRIGAdxi_sub_list = []
-        for i, diff_int_ind in enumerate(self.diff_int_inds):
+        for i, index in enumerate(self.int_indices_diff):
             dRIGAdxi_sub_list += [[[None, None],[None, None]]]
             for side in range(num_sides):
-                dRIGAdxi_sub_temp = self.dRIGAdxi_sub(diff_int_ind, side)
-                ##### Apply BCs to dRIGAdxi###########
-                s_ind0, s_ind1 = self.mapping_list[diff_int_ind]
-                zero_dof0 = self.splines[s_ind0].zeroDofs
-                zero_dof1 = self.splines[s_ind1].zeroDofs
-                dRIGAdxi_sub_temp[0].zeroRows(zero_dof0, diag=0)
-                dRIGAdxi_sub_temp[0].assemble()
-                dRIGAdxi_sub_temp[1].zeroRows(zero_dof1, diag=0)
-                dRIGAdxi_sub_temp[1].assemble()
-                ######################################
-
+                dRIGAdxi_sub_temp = self.dRIGAdxi_sub(index, side)
                 dRIGAdxi_sub_list[i][0][side] = dRIGAdxi_sub_temp[0]
                 dRIGAdxi_sub_list[i][1][side] = dRIGAdxi_sub_temp[1]
 
-        self.dRIGAdxi_list = [[None for i1 in range(int(len(self.diff_int_inds)*num_sides))] 
+        self.dRIGAdxi_list = [[None for i1 in range(int(len(self.int_indices_diff)*num_sides))] 
                                for i2 in range(self.num_splines)]
-        for i, diff_int_ind in enumerate(self.diff_int_inds):
-            s_ind0, s_ind1 = self.mapping_list[diff_int_ind]
+        for i, index in enumerate(self.int_indices_diff):
+            s_ind0, s_ind1 = self.mapping_list[index]
             self.dRIGAdxi_list[s_ind0][i*num_sides] = dRIGAdxi_sub_list[i][0][0]
             self.dRIGAdxi_list[s_ind0][i*num_sides+1] = dRIGAdxi_sub_list[i][0][1]
             self.dRIGAdxi_list[s_ind1][i*num_sides] = dRIGAdxi_sub_list[i][1][0]
@@ -1211,11 +802,11 @@ class NonMatchingOpt(NonMatchingCoupling):
         # Fill out empty rows before creating nest matrix
         for s_ind in range(self.num_splines):
             none_row = True
-            for j in range(int(len(self.diff_int_inds)*num_sides)):
+            for j in range(int(len(self.int_indices_diff)*num_sides)):
                 if self.dRIGAdxi_list[s_ind][j] is not None:
                     none_row = False
             if none_row:
-                num_pts = int(self.mortar_nels[self.diff_int_inds[0]]+1)
+                num_pts = int(self.mortar_nels[self.int_indices_diff[0]]+1)
                 row_sizes = m2p(self.splines[s_ind].M).sizes[1]
                 col_sizes = 2*num_pts # TODO: This size doesn't work in parallel
                 self.dRIGAdxi_list[s_ind][0] = zero_petsc_mat(row_sizes, col_sizes,
@@ -1291,8 +882,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.R_pen1M = derivative(PE, self.u1M)
         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-        self.R_pen0M_mat = Lambda_tilde(self.R_pen0M_vec, num_pts, self.nsd, self.npd, 0)
-        self.R_pen1M_mat = Lambda_tilde(self.R_pen1M_vec, num_pts, self.nsd, self.npd, 1)
+        self.R_pen0M_mat = Lambda_tilde(self.R_pen0M_vec, num_pts, self.nsd, self.para_dim, 0)
+        self.R_pen1M_mat = Lambda_tilde(self.R_pen1M_vec, num_pts, self.nsd, self.para_dim, 1)
 
         self.der_mat_FE_diag = self.A1.transposeMatMult(self.R_pen0M_mat.transpose())
         self.der_mat_FE_diag += self.A2.transposeMatMult(self.R_pen1M_mat.transpose())
@@ -1311,8 +902,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.dR1Modu1M_mat = m2p(assemble(self.dR1Modu1M))
         self.A1u_vec = A_x(self.A1, self.uFE)
         self.A2u_vec = A_x(self.A2, self.uFE)
-        self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.npd, order=1)
-        self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.npd, order=2)
+        self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.para_dim, order=1)
+        self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.para_dim, order=2)
 
         temp_mat = self.A0o.transposeMatMult(self.dR0Modu0M_mat) + \
                    self.A1o.transposeMatMult(self.dR1Modu0M_mat)
@@ -1333,8 +924,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.dR1Mdu1M_mat = m2p(assemble(self.dR1Mdu1M))
         # self.A1u_vec = A_x(self.A1, self.uFE)
         # self.A2u_vec = A_x(self.A2, self.uFE)
-        # self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.npd, order=1)
-        # self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.npd, order=2)
+        # self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.para_dim, order=1)
+        # self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.para_dim, order=2)
 
         temp_mat = self.A0.transposeMatMult(self.dR0Mdu0M_mat) + \
                    self.A1.transposeMatMult(self.dR1Mdu0M_mat)
@@ -1395,10 +986,10 @@ class NonMatchingOpt(NonMatchingCoupling):
                                + self.A1o.transposeMatMult(self.dR1ModP1M_mat_list[i])]
             self.A1cP_vec_list += [A_x(self.A1c, self.PFE[i])]
             self.A1cP_mat_list += [Lambda(self.A1cP_vec_list[i], num_pts, 
-                                          1, self.npd, 1)]
+                                          1, self.para_dim, 1)]
             self.A2cP_vec_list += [A_x(self.A2c, self.PFE[i])]
             self.A2cP_mat_list += [Lambda(self.A2cP_vec_list[i], num_pts, 
-                                          1, self.npd, 2)]
+                                          1, self.para_dim, 2)]
             self.der_mat_FE_offdiag += self.temp_mat1_list_offdiag[i].matMult(self.A1cP_mat_list[i])
             self.der_mat_FE_offdiag += self.temp_mat2_list_offdiag[i].matMult(self.A2cP_mat_list[i])
 
@@ -1417,10 +1008,10 @@ class NonMatchingOpt(NonMatchingCoupling):
                                + self.A1.transposeMatMult(self.dR1MdP1M_mat_list[i])]
             # self.A1cP_vec_list += [A_x(self.A1c, self.PFE[i])]
             # self.A1cP_mat_list += [Lambda(self.A1cP_vec_list[i], num_pts, 
-            #                               1, self.npd, 1)]
+            #                               1, self.para_dim, 1)]
             # self.A2cP_vec_list += [A_x(self.A2c, self.PFE[i])]
             # self.A2cP_mat_list += [Lambda(self.A2cP_vec_list[i], num_pts, 
-            #                               1, self.npd, 2)]
+            #                               1, self.para_dim, 2)]
             self.der_mat_FE_diag += self.temp_mat1_list_diag[i].matMult(self.A1cP_mat_list[i])
             self.der_mat_FE_diag += self.temp_mat2_list_diag[i].matMult(self.A2cP_mat_list[i])
 
@@ -1467,22 +1058,18 @@ class NonMatchingOpt(NonMatchingCoupling):
         #######################
         # print("Step 8 ", "*"*30)
         # Off-diagonal
-        self.switch_col_mat = zero_petsc_mat(num_pts*self.npd, num_pts*self.npd, 
-                                             PREALLOC=num_pts*self.npd)
+        self.switch_col_mat = zero_petsc_mat(num_pts*self.para_dim, num_pts*self.para_dim, 
+                                             PREALLOC=num_pts*self.para_dim)
         for i in range(num_pts):
-            self.switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, 1.)
-            self.switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, 1.)
-            # self.switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, -1.)
-            # self.switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, -1.)
+            self.switch_col_mat.setValue(i*self.para_dim, num_pts*self.para_dim-i*self.para_dim-2, 1.)
+            self.switch_col_mat.setValue(i*self.para_dim+1, num_pts*self.para_dim-i*self.para_dim-1, 1.)
+            # self.switch_col_mat.setValue(i*self.para_dim, num_pts*self.para_dim-i*self.para_dim-2, -1.)
+            # self.switch_col_mat.setValue(i*self.para_dim+1, num_pts*self.para_dim-i*self.para_dim-1, -1.)
         self.switch_col_mat.assemble()
         self.der_mat_IGA_offdiag = self.der_mat_IGA_rev_offdiag.matMult(self.switch_col_mat)
 
         # Diagonal
         self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag.matMult(self.switch_col_mat)
-
-        # # No coloum switch
-        # self.der_mat_IGA_offdiag = self.der_mat_IGA_rev_offdiag
-        # self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag
 
         if side == 0:
             dRIGAdxi_sub = [self.der_mat_IGA_diag, self.der_mat_IGA_offdiag]
@@ -1490,151 +1077,8 @@ class NonMatchingOpt(NonMatchingCoupling):
             dRIGAdxi_sub = [self.der_mat_IGA_offdiag, self.der_mat_IGA_diag]
         return dRIGAdxi_sub
 
-
-    # def dRIGAdxi_FD_diag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
-
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
-
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][side][1])
-    #         self.u0M = self.mortar_funcs[index][side][0]
-    #         self.u1M = self.mortar_funcs[index][side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
-
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][side]].M.size(1),
-    #                            self.mesh_coord_init.size))
-
-    #     R_init = R()[:]
-
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
-
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
-
-    # def dRIGAdxi_FD_offdiag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
-
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
-
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][other_side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][other_side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][other_side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][other_side][1])
-    #         self.u0M = self.mortar_funcs[index][other_side][0]
-    #         self.u1M = self.mortar_funcs[index][other_side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
-
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][other_side]].M.size(1),
-    #                            self.mesh_coord_init.size))
-
-    #     R_init = R()[:]
-
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
-
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
-
-    #######################################################
-    ####### Create and save pvd files #####################
-    #######################################################
-
     def create_files(self, save_path="./", folder_name="results/", 
-                     refine_mesh=False, ref_nel=32):
+                     thickness=False, refine_mesh=False, ref_nel=32):
         """
         Create pvd files for all spline patches' displacements 
         and control points (and thickness is needed).
@@ -1646,7 +1090,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.u_files = []
         self.F_file_names = []
         self.F_files = []
-        if self.opt_thickness:
+        if thickness:
             self.t_file_names = []
             self.t_files = []
         for i in range(self.num_splines):
@@ -1666,7 +1110,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                                              +'_'+str(j+1)+'_file.pvd',]
                     self.F_files[i] += [File(self.comm, 
                                              self.F_file_names[i][j+1]),]
-            if self.opt_thickness:
+            if thickness:
                 self.t_file_names += [save_path+folder_name+'t'+str(i)
                                       +'_file.pvd',]
                 self.t_files += [File(self.comm, self.t_file_names[i]),]
@@ -1680,7 +1124,7 @@ class NonMatchingOpt(NonMatchingCoupling):
             self.AF_ref_list = []
             self.u_func_ref_list = [None for s_ind in range(self.num_splines)]
             self.F_func_ref_list = [[] for s_ind in range(self.num_splines)]
-            if self.opt_thickness:
+            if thickness:
                 self.Ah_ref_list = []
                 self.h_th_func_ref_list = [None for s_ind in 
                                            range(self.num_splines)]
@@ -1705,14 +1149,15 @@ class NonMatchingOpt(NonMatchingCoupling):
                     if field == 2:
                         self.F_func_ref_list[s_ind] += \
                             [Function(self.V_ref_list[s_ind])]
-                if self.opt_thickness:
+                if thickness:
                     self.Ah_ref_list += [create_transfer_matrix(
                                      self.h_th[s_ind].function_space(),
                                      self.V_ref_list[s_ind])]
                     self.h_th_func_ref_list[s_ind] = \
                         Function(self.V_ref_list[s_ind])
                 
-    def save_files(self):
+
+    def save_files(self, thickness=False):
         """
         Save splines' displacements and control points to pvd files.
         """
@@ -1753,7 +1198,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                     w_func.rename('F'+str(i)+'_'+str(j+1), 
                                   'F'+str(i)+'_'+str(j+1))
                     self.F_files[i][j+1] << w_func
-            if self.opt_thickness:
+            if thickness:
                 if self.refine_mesh:
                     A_x_b(self.Ah_ref_list[i], v2p(self.h_th[i].vector()),
                           v2p(self.h_th_func_ref_list[i].vector()))
@@ -1762,98 +1207,6 @@ class NonMatchingOpt(NonMatchingCoupling):
                     h_th_func = self.h_th[i]
                 h_th_func.rename('t'+str(i), 't'+str(i))
                 self.t_files[i] << h_th_func
-
-    #######################################################
-    ######## Aero pressure related methods ################
-    #######################################################
-
-    def set_aero_linear_splines(self, linear_splines, Paero):
-        self.use_aero_pressure = True
-        self.linear_splines = linear_splines
-        self.Paero = Paero
-
-        # Create nested vectors in IGA DoFs
-        self.linear_spline_vec_iga_list = []
-        self.linear_spline_vec_iga_dof_list = []
-        for s_ind in range(self.num_splines):
-            self.linear_spline_vec_iga_list += [zero_petsc_vec(
-                self.linear_splines[s_ind].M.size(1), comm=self.comm)]
-            self.linear_spline_vec_iga_dof_list += [
-                self.linear_splines[s_ind].M.size(1),]
-
-        self.linear_spline_vec_iga_nest = create_nest_PETScVec(
-            self.linear_spline_vec_iga_list, comm=self.comm)
-        self.linear_spline_vec_iga_dof = \
-            self.linear_spline_vec_iga_nest.getSizes()[1]
-
-        dR_dPaero_ufl_symexp = []
-        for s_ind in range(self.num_splines):
-            dR_dPaero_ufl_symexp += [derivative(self.residuals_form[s_ind],
-                                    self.Paero[s_ind])]
-        self.dR_dPaero_symexp = [Form(dR_dh_th) for dR_dh_th 
-                                in dR_dPaero_ufl_symexp]
-
-        self.Paero_fe_list = [v2p(Paero_sub.vector()) 
-                              for Paero_sub in self.Paero]
-        self.Paero_fe_nest = create_nest_PETScVec(self.Paero_fe_list,
-                                                  comm=self.comm)
-        self.Paero_iga_nest = self.linear_spline_vec_iga_nest.copy()
-
-        self.Paero_fe_sizes = [Paero_fe_sub.getSizes()[1] for Paero_fe_sub in
-                           self.Paero_fe_list]
-        self.init_Paero = None
-
-    def assemble_dRFEdPaero(self):
-        """
-        Derivatives of non-matching residual w.r.t. aero pressures
-        in FE DoFs.
-        """
-        dRFEdPaero = [[None for i1 in range(self.num_splines)] 
-                            for i2 in range(self.num_splines)]
-        for i in range(self.num_splines):
-            dRFEdPaero_assemble = assemble(self.dR_dPaero_symexp[i])
-            dRFEdPaero[i][i] = m2p(dRFEdPaero_assemble)
-        return dRFEdPaero
-
-    def dRIGAdPaero(self):
-        dRFEdPaero = self.assemble_dRFEdPaero()
-
-        dRIGAdPaero_list = []
-        for i in range(self.num_splines):
-            dRIGAdPaero_list += [[],]
-            for j in range(self.num_splines):
-                if dRFEdPaero[i][j] is not None:
-                    # Extract matrix
-                    M_left = m2p(self.splines[i].M)
-                    M_right = m2p(self.linear_splines[j].M)
-                    mat_iga_temp = AT_R_B(M_left, dRFEdPaero[i][j], M_right)
-                else:
-                    mat_iga_temp = None
-                dRIGAdPaero_list[i] += [mat_iga_temp,]
-        mat_iga = create_nest_PETScMat(dRIGAdPaero_list, comm=self.comm)
-
-        if MPI.size(self.comm) == 1:
-            mat_iga.convert('seqaij')
-        else:
-            mat_iga = create_aijmat_from_nestmat(mat_iga, 
-                      dRIGAdPaero_list, comm=self.comm)
-        return mat_iga
-
-    def update_Paero(self, Paero_array):
-        """
-        Update splines' thickness functions with input array
-        in IGA DoFs
-        """
-        update_nest_vec(Paero_array, self.Paero_iga_nest, comm=self.comm)
-        Paero_iga_sub = self.Paero_iga_nest.getNestSubVecs()
-        for s_ind in range(self.num_splines):
-            M_petsc = m2p(self.linear_splines[s_ind].M)
-            M_petsc.mult(Paero_iga_sub[s_ind], self.Paero_fe_list[s_ind])
-            self.Paero_fe_list[s_ind].ghostUpdate()
-            self.Paero_fe_list[s_ind].assemble()
-
-    #######################################################
-    #######################################################  
 
 if __name__ == '__main__':
     pass

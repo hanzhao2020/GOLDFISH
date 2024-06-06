@@ -667,14 +667,14 @@ class NonMatchingOpt(NonMatchingCoupling):
     #     return self.int_edge_cons_dofs, self.int_edge_cons_vals
 
 
-    def create_diff_intersections(self, num_edge_pts=None):
+    def create_diff_intersections(self):
         """
         This function is noly needed when differentiating intersections'
         parametric coordiantes, and requires the class ``CPIGA2Xi``
         """
         assert self.transfer_mat_deriv == 2
         self.cpiga2xi = CPIGA2Xi(self.preprocessor, self.shopt_surf_inds, 
-                                 self.opt_field, num_edge_pts)
+                                 self.opt_field)
         self.diff_int_inds = self.preprocessor.diff_int_inds
         self.Vms_2dim = [VectorFunctionSpace(
                          self.mortar_meshes[diff_int_ind], 'CG', 1)
@@ -723,11 +723,11 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.xi_nest.setArray(xi_flat)
         self.xi_nest.assemble()
 
-    def update_transfer_matrices_sub(self, moartar_coords, index, side):
+    def update_transfer_matrices_sub(self, xi_func, index, side):
         """
         Update transfer matrices for single intersection on one side
         """
-        move_mortar_mesh(self.mortar_meshes[index], moartar_coords)
+        move_mortar_mesh(self.mortar_meshes[index], xi_func)
         self.transfer_matrices_list[index][side] = \
             create_transfer_matrix_list(self.splines[
             self.mapping_list[index][side]].V, 
@@ -754,10 +754,9 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         for i, diff_int_ind in enumerate(self.diff_int_inds):
             for side in range(self.npd):
-            # for side in [1,0]:
-                mortar_coords = v2p(self.xi_funcs[int(i*self.npd+side)].vector())\
-                                .array.reshape(-1,2)
-                self.update_transfer_matrices_sub(mortar_coords, diff_int_ind, side)
+                self.update_transfer_matrices_sub(
+                    self.xi_funcs[int(i*self.npd+side)],
+                    diff_int_ind, side)
 
     # def update_transfer_matrices(self):
     #     for int_ind, int_ind_global in enumerate(self.diff_int_inds):
@@ -798,8 +797,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                                 left_ind_list=None, right_ind_list=None, 
                                 ext_right=True,
                                 left_scalar=False, right_scalar=False, 
-                                apply_row_bcs=False, apply_col_bcs=False,
-                                diag=1):
+                                apply_row_bcs=False, apply_col_bcs=False):
         """
         Extract non-matching matrix from FE to IGA DoFs.
         """
@@ -830,14 +828,14 @@ class NonMatchingOpt(NonMatchingCoupling):
                     if apply_row_bcs and apply_col_bcs:
                         if i == j:
                             mat_iga_temp = apply_bcs_mat(self.splines[s_ind0],
-                                           mat_iga_temp, diag=diag)
+                                           mat_iga_temp, diag=1)
                         else:
                             mat_iga_temp = apply_bcs_mat(self.splines[s_ind0],
                                            mat_iga_temp, self.splines[s_ind1], 
                                            diag=0)
                     elif apply_row_bcs and not apply_col_bcs:
                         if i == j:
-                            diag = diag
+                            diag = 1
                         else:
                             diag=0
                         mat_iga_temp.zeroRows(self.splines[s_ind0].zeroDofs,
@@ -1104,27 +1102,8 @@ class NonMatchingOpt(NonMatchingCoupling):
         dRdcp_FE = self.assemble_dRFEdCPFE(ind_list, field)
         dRIGAdcp_funcs = self.extract_nonmatching_mat(dRdcp_FE, 
                          right_ind_list=ind_list,
-                         ext_right=False, 
-                         apply_col_bcs=False, apply_row_bcs=True, diag=0)
+                         ext_right=False, apply_col_bcs=False)
         return dRIGAdcp_funcs
-
-
-    def dRIGAdCPIGA_FD(self, CP, field, h=1e-8):
-        self.update_CPIGA(CP, field)
-        R_init = self.RIGA().array
-
-        self.dRigadcpiga_FD = np.zeros((R_init.size, CP.size))
-        cp_init = CP.copy()
-
-        for cp_ind, cpi in enumerate(CP):
-            perturb = np.zeros(CP.size)
-            perturb[cp_ind] = h
-            cp_perturb = cp_init + perturb
-            self.update_CPIGA(cp_perturb, field)
-            R_perturb = self.RIGA().array
-            R_diff = R_perturb - R_init
-            self.dRigadcpiga_FD[:,cp_ind] = R_diff/h
-        return self.dRigadcpiga_FD
 
     def dRIGAdCPIGA(self, field):
         """
@@ -1136,8 +1115,7 @@ class NonMatchingOpt(NonMatchingCoupling):
         dRIGAdcp_IGA = self.extract_nonmatching_mat(dRdcp_FE, 
                          right_ind_list=ind_list,
                          ext_right=True, right_scalar=True, 
-                         apply_col_bcs=False, apply_row_bcs=True,
-                         diag=0)
+                         apply_col_bcs=False)
         return dRIGAdcp_IGA
 
     def dRIGAdh_th(self):
@@ -1151,30 +1129,6 @@ class NonMatchingOpt(NonMatchingCoupling):
                          apply_col_bcs=False)
         return dRIGAdh_th_mat
 
-
-    def dRIGAdxi_FD(self, xi_flat, h=1e-8):
-
-        xi_init = xi_flat.copy()
-        self.update_xi(xi_init)
-        self.update_transfer_matrices()
-        R_init = self.RIGA().array
-
-        self.dRigadxi_FD = np.zeros((R_init.size, xi_flat.size))
-
-        for xi_ind, xi in enumerate(xi_flat):
-            print("Computing FD dRIGAdxi, column: {} out of {}".format(xi_ind, xi_flat.size))
-            perturb = np.zeros(xi_flat.size)
-            perturb[xi_ind] = h
-            xi_perturb = xi_init + perturb
-            self.update_xi(xi_perturb)
-            self.update_transfer_matrices()
-            R_perturb = self.RIGA().array
-            R_diff = R_perturb - R_init
-
-            self.dRigadxi_FD[:,xi_ind] = R_diff/h
-
-        return self.dRigadxi_FD
-
     # def dRIGAdxi(self, diff_int_inds=None):
     def dRIGAdxi(self):
         """
@@ -1186,16 +1140,6 @@ class NonMatchingOpt(NonMatchingCoupling):
             dRIGAdxi_sub_list += [[[None, None],[None, None]]]
             for side in range(num_sides):
                 dRIGAdxi_sub_temp = self.dRIGAdxi_sub(diff_int_ind, side)
-                ##### Apply BCs to dRIGAdxi###########
-                s_ind0, s_ind1 = self.mapping_list[diff_int_ind]
-                zero_dof0 = self.splines[s_ind0].zeroDofs
-                zero_dof1 = self.splines[s_ind1].zeroDofs
-                dRIGAdxi_sub_temp[0].zeroRows(zero_dof0, diag=0)
-                dRIGAdxi_sub_temp[0].assemble()
-                dRIGAdxi_sub_temp[1].zeroRows(zero_dof1, diag=0)
-                dRIGAdxi_sub_temp[1].assemble()
-                ######################################
-
                 dRIGAdxi_sub_list[i][0][side] = dRIGAdxi_sub_temp[0]
                 dRIGAdxi_sub_list[i][1][side] = dRIGAdxi_sub_temp[1]
 
@@ -1480,154 +1424,11 @@ class NonMatchingOpt(NonMatchingCoupling):
         # Diagonal
         self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag.matMult(self.switch_col_mat)
 
-        # # No coloum switch
-        # self.der_mat_IGA_offdiag = self.der_mat_IGA_rev_offdiag
-        # self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag
-
         if side == 0:
             dRIGAdxi_sub = [self.der_mat_IGA_diag, self.der_mat_IGA_offdiag]
         elif side == 1:
             dRIGAdxi_sub = [self.der_mat_IGA_offdiag, self.der_mat_IGA_diag]
         return dRIGAdxi_sub
-
-
-    # def dRIGAdxi_FD_diag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
-
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
-
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][side][1])
-    #         self.u0M = self.mortar_funcs[index][side][0]
-    #         self.u1M = self.mortar_funcs[index][side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
-
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][side]].M.size(1),
-    #                            self.mesh_coord_init.size))
-
-    #     R_init = R()[:]
-
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
-
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
-
-    # def dRIGAdxi_FD_offdiag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
-
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
-
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][other_side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][other_side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][other_side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][other_side][1])
-    #         self.u0M = self.mortar_funcs[index][other_side][0]
-    #         self.u1M = self.mortar_funcs[index][other_side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
-
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][other_side]].M.size(1),
-    #                            self.mesh_coord_init.size))
-
-    #     R_init = R()[:]
-
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
-
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
 
     #######################################################
     ####### Create and save pvd files #####################
