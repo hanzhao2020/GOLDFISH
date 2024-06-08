@@ -1,43 +1,13 @@
 """
 Initial geometry can be downloaded from the following link:
-https://drive.google.com/file/d/1fRaho_xzmChlgLdrMM9CQ7WTqr9_DItt/view?usp=share_link
+https://drive.google.com/file/d/1MyHJe_t5kUvFJO8rNo2B41JtiKZWm-VP/view?usp=sharing
 """
-import sys
-sys.path.append("./opers/")
-sys.path.append("./comps/")
-
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import openmdao.api as om
-# from igakit.cad import *
-# from igakit.io import VTK
-# from GOLDFISH.nonmatching_opt_om import *
-
-# from cpiga2xi_comp import CPIGA2XiComp
-# from disp_states_mi_comp import DispMintStatesComp
-# # from pin_cpsurf_comp import CPSurfPinComp
-# # from align_cpsurf_comp import CPSurfAlignComp
-# from max_int_xi_comp import MaxIntXiComp
-# from min_int_xi_comp import MinIntXiComp
-# from int_xi_edge_comp import IntXiEdgeComp
-
 import numpy as np
 import matplotlib.pyplot as plt
 import openmdao.api as om
 from igakit.cad import *
 from igakit.io import VTK
 from GOLDFISH.nonmatching_opt_om import *
-
-from cpiga2xi_comp import CPIGA2XiComp
-from disp_states_mi_comp import DispMintStatesComp
-from max_int_xi_comp import MaxIntXiComp
-from min_int_xi_comp import MinIntXiComp
-# from int_xi_edge_comp_quadratic import IntXiEdgeComp
-from int_xi_edge_comp import IntXiEdgeComp
-from int_xi_edge_int_comp import IntXiEdgeIntComp
-
-from int_xi_extreme_comp import IntXiExtremeComp
-# from int_xi_pin_comp import IntXiPinComp
 
 set_log_active(False)
 
@@ -64,7 +34,6 @@ class ShapeOptGroup(om.Group):
         self.options.declare('int_xi_edge_name', default='int_xi_edge')
         self.options.declare('int_xi_extreme_name', default='int_xi_extreme')
         self.options.declare('int_xi_pin_name', default='int_xi_pin')
-
 
     def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
@@ -141,19 +110,6 @@ class ShapeOptGroup(om.Group):
         self.int_xi_edge_comp_name = 'int_xi_edge_comp'
         self.int_xi_extreme_comp_name = 'int_xi_extreme_comp'
         self.int_xi_pin_comp_name = 'int_xi_pin_comp'
-
-        # self.diff_vec = []
-        # for field_ind, field in enumerate(self.opt_field):
-        #     if field == 0:
-        #         self.diff_vec += [np.asarray(self.cpdesign2analysis.init_cp_coarse[field_ind] \
-        #                        - np.dot(self.cpdesign2analysis.cp_coarse_align_deriv_list[field_ind].todense()[:,0:2],
-        #                          self.cpdesign2analysis.init_cp_design[field_ind]))[0]]
-        #     else:
-        #         self.diff_vec += [self.cpdesign2analysis.init_cp_coarse[field_ind] \
-        #                        - self.cpdesign2analysis.cp_coarse_align_deriv_list[field_ind] \
-        #                         *self.cpdesign2analysis.init_cp_design[field_ind]]
-        #     if field in [1,2]:
-        #         self.diff_vec[field_ind] = np.zeros(self.diff_vec[field_ind].size)
         
     def setup(self):
         # Add inputs comp
@@ -165,7 +121,6 @@ class ShapeOptGroup(om.Group):
         self.add_subsystem(self.inputs_comp_name, inputs_comp)
 
         self.cp_align_comp = CPSurfAlignComp(
-        # self.cp_align_comp = CPSurfRigidAlignComp(
                              cpdesign2analysis=self.cpdesign2analysis,
                              diff_vec=None, #self.diff_vec,
                              input_cp_design_name_pre=self.cp_design_name_pre,
@@ -230,7 +185,7 @@ class ShapeOptGroup(om.Group):
                            input_cp_iga_name_pre=self.cp_analysis_name_pre,
                            input_xi_name=self.int_name,
                            output_u_name=self.disp_name)
-        self.disp_states_comp.init_parameters(save_files=True,
+        self.disp_states_comp.init_parameters(save_files=save_files,
                                              nonlinear_solver_rtol=1e-3,
                                              nonlinear_solver_max_it=10)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
@@ -243,19 +198,6 @@ class ShapeOptGroup(om.Group):
                           output_wint_name=self.int_energy_name)
         self.int_energy_comp.init_parameters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
-
-
-        # # Add internal energy comp (objective function)
-        # self.int_energy_comp = IntEnergyReguComp(
-        #                   nonmatching_opt=self.nonmatching_opt,
-        #                   input_cp_iga_name_pre=self.cp_analysis_name_pre,
-        #                   input_u_name=self.disp_name,
-        #                   input_xi_name=self.int_name,
-        #                   output_wint_name=self.int_energy_name,
-        #                   regu_para=1e3,
-        #                   regu_xi_edge=True)
-        # self.int_energy_comp.init_parameters()
-        # self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
         # Add volume comp (constraint)
         self.vol_surf_inds = [1]
@@ -271,36 +213,6 @@ class ShapeOptGroup(om.Group):
             self.vol_val += assemble(self.nonmatching_opt.h_th[s_ind]
                             *self.nonmatching_opt.splines[s_ind].dx)
 
-        # self.volume_comps = []
-        # self.vol_val_list = []
-        # for vol_ind, surf_ind in enumerate(self.vol_surf_inds):
-        #     self.volume_comps += [VolumeComp(
-        #                    nonmatching_opt=self.nonmatching_opt,
-        #                    vol_surf_inds=[surf_ind],
-        #                    input_cp_iga_name_pre=self.cp_analysis_name_pre,
-        #                    output_vol_name=self.volume_name+str(vol_ind))]
-        #     self.volume_comps[vol_ind].init_parameters()
-        #     self.add_subsystem(self.volume_comp_name+str(vol_ind), 
-        #                       self.volume_comps[vol_ind])
-        #     self.vol_val_list += [assemble(self.nonmatching_opt.h_th[surf_ind]
-        #                           *self.nonmatching_opt.splines[surf_ind].dx)]
-
-        # # Add max int xi comp (constraint)
-        # self.max_int_xi_comp = MaxIntXiComp(
-        #                        nonmatching_opt=self.nonmatching_opt, rho=1e3,
-        #                        input_xi_name=self.int_name,
-        #                        output_name=self.max_int_xi_name)
-        # self.max_int_xi_comp.init_parameters()
-        # self.add_subsystem(self.max_int_xi_comp_name, self.max_int_xi_comp)
-
-        # # Add min int xi comp (constraint)
-        # self.min_int_xi_comp = MinIntXiComp(
-        #                        nonmatching_opt=self.nonmatching_opt, rho=1e3,
-        #                        input_xi_name=self.int_name,
-        #                        output_name=self.min_int_xi_name)
-        # self.min_int_xi_comp.init_parameters()
-        # self.add_subsystem(self.min_int_xi_comp_name, self.min_int_xi_comp)
-
         # Add int xi edge comp (constraint)
         self.int_xi_edge_comp = IntXiEdgeComp(
                                nonmatching_opt=self.nonmatching_opt,
@@ -309,31 +221,6 @@ class ShapeOptGroup(om.Group):
         self.int_xi_edge_comp.init_parameters()
         self.add_subsystem(self.int_xi_edge_comp_name, self.int_xi_edge_comp)
         self.int_xi_edge_cons_val = np.zeros(self.int_xi_edge_comp.output_shape)
-
-
-        # self.int_xi_edge_comp = IntXiEdgeIntComp(
-        #                         nonmatching_opt=self.nonmatching_opt,
-        #                         input_xi_name=self.int_name,
-        #                         output_name=self.int_xi_edge_name)
-        # self.int_xi_edge_comp.init_parameters()
-        # self.add_subsystem(self.int_xi_edge_comp_name, self.int_xi_edge_comp)
-
-
-        # self.int_xi_extreme_comp = IntXiExtremeComp(
-        #                            nonmatching_opt=self.nonmatching_opt, 
-        #                            num_eval_pts=extreme_cons_eval_pts,
-        #                            input_xi_name=self.int_name,
-        #                            output_name=self.int_xi_extreme_name)
-        # self.int_xi_extreme_comp.init_parameters()
-        # self.add_subsystem(self.int_xi_extreme_comp_name, self.int_xi_extreme_comp)
-
-        # self.int_xi_pin_comp = IntXiPinComp(
-        #                        nonmatching_opt=self.nonmatching_opt,
-        #                        input_xi_name=self.int_name,
-        #                        output_name=self.int_xi_pin_name)
-        # self.int_xi_pin_comp.init_parameters()
-        # self.add_subsystem(self.int_xi_pin_comp_name, self.int_xi_pin_comp)
-        # self.int_xi_pin_cons_val = np.zeros(self.int_xi_pin_comp.output_shape)
 
         # Connect names between components
         for field_ind, field in enumerate(self.opt_field):
@@ -373,37 +260,14 @@ class ShapeOptGroup(om.Group):
                          self.volume_comp_name+'.'
                          +self.cp_analysis_name_list[field_ind])
 
-            # for vol_ind, surf_ind in enumerate(self.vol_surf_inds):
-            #     self.connect(self.cp_knot_refine_comp_name+'.'
-            #                  +self.cp_analysis_name_list[field_ind],
-            #                  self.volume_comp_name+str(vol_ind)+'.'
-            #                  +self.cp_analysis_name_list[field_ind])
-
-
-        # self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #              self.max_int_xi_comp_name+'.'+self.int_name)
-
-        # self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #              self.min_int_xi_comp_name+'.'+self.int_name)
-
         self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
                      self.int_xi_edge_comp_name+'.'+self.int_name)
-
-        # self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #              self.int_xi_extreme_comp_name+'.'+self.int_name)
-
-        # self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #              self.int_xi_pin_comp_name+'.'+self.int_name)
 
         self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
                      self.disp_states_comp_name+'.'+self.int_name)
 
         self.connect(self.disp_states_comp_name+'.'+self.disp_name,
                      self.int_energy_comp_name+'.'+self.disp_name)
-
-        # # Int energy with xi edge regu
-        # self.connect(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #              self.int_energy_comp_name+'.'+self.int_name)
 
         # For constraints
         if len(self.regu_field) > 0:
@@ -430,7 +294,6 @@ class ShapeOptGroup(om.Group):
                          self.cp_dist_comp_name+'.'
                          +self.cp_design_name_list[opt_field_ind])
 
-
         ####################################################
         # Add design variable, constraints and objective
         for field_ind, field in enumerate(self.opt_field):
@@ -443,7 +306,6 @@ class ShapeOptGroup(om.Group):
                                 lower=self.design_var_lower[field_ind],
                                 upper=self.design_var_upper[field_ind],
                                 scaler=scaler)
-
 
         if len(self.regu_field) > 0:
             for field_ind, regu_field in enumerate(self.regu_field):
@@ -467,36 +329,13 @@ class ShapeOptGroup(om.Group):
                              +self.cp_dist_name_list[field_ind],
                              lower=lower_val)
 
-
-        # self.add_constraint(self.cpiga2xi_comp_name+'.'+self.int_name,
-        #                     lower=0., upper=1.)#, scaler=1e3)
-        # self.add_constraint(self.max_int_xi_comp_name+'.'+self.max_int_xi_name,
-        #                     upper=1.)
-        # self.add_constraint(self.min_int_xi_comp_name+'.'+self.min_int_xi_name,
-        #                     lower=0.)
         self.add_constraint(self.int_xi_edge_comp_name+'.'+self.int_xi_edge_name,
                             equals=self.int_xi_edge_cons_val, scaler=1)
-                            # upper=1e-3, scaler=1)
-
-        # self.add_constraint(self.int_xi_extreme_comp_name+'.'+self.int_xi_extreme_name,
-        #                     lower=0., upper=1.)
-        # self.add_constraint(self.int_xi_pin_comp_name+'.'+self.int_xi_pin_name,
-        #                     equals=self.int_xi_pin_cons_val)
-
-
         self.add_constraint(self.volume_comp_name+'.'+self.volume_name,
-                            # upper=1.5*self.vol_val)
                             equals=self.vol_val)
-
-        # for vol_ind, surf_ind in enumerate(self.vol_surf_inds):
-        #     self.add_constraint(self.volume_comp_name+str(vol_ind)+'.'+self.volume_name+str(vol_ind),
-        #                         # upper=1.2*self.vol_val_list[vol_ind])
-        #                         equals=self.vol_val[vol_ind])
-
         self.add_objective(self.int_energy_comp_name+'.'
                            +self.int_energy_name,
                            scaler=1e6)
-
 
 
 class SplineBC(object):
@@ -536,18 +375,11 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
-test_ind = 7
+save_files = False
 # optimizer = 'SNOPT'
 optimizer = 'SLSQP'
-# opt_field = [0,2]
-# save_path = './'
-# save_path = '/home/han/Documents/test_results/'
-save_path = '/Users/hanzhao/Documents/test_results/'
-# folder_name = "results/"
-folder_name = "results"+str(test_ind)+"/"
-
-# filename_igs = "./geometry/init_Tbeam_geom_moved.igs"
-# filename_igs = "./geometry/init_Tbeam_geom_curved.igs"
+save_path = './'
+folder_name = "results/"
 filename_igs = "./geometry/init_Tbeam_geom_curved_2patch.igs"
 igs_shapes = read_igs_file(filename_igs, as_compound=False)
 occ_surf_list = [topoface2surface(face, BSpline=True) 
@@ -572,24 +404,11 @@ spline_bcs = [spline_bc0,]*2
 preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
                                 refine=False)
 print("Computing intersections...")
-# int_data_filename = "int_data_2patch.npz"
-# if os.path.isfile(int_data_filename):
-#     preprocessor.load_intersections_data(int_data_filename)
-# else:
-#     preprocessor.compute_intersections(mortar_refine=1)
-#     preprocessor.save_intersections_data(int_data_filename)
-
 preprocessor.compute_intersections(mortar_refine=2)
-
 if mpirank == 0:
     print("Total DoFs:", preprocessor.total_DoFs)
     print("Number of intersections:", preprocessor.num_intersections_all)
 
-# cpiga2xi = CPIGA2Xi(preprocessor)
-
-# bs_data = [BSplineSurfaceData(bs) for bs in preprocessor.BSpline_surfs]
-# cp_shapes = [surf_data.control.shape[0:2]
-#              for surf_data in bs_data]
 
 if mpirank == 0:
     print("Creating splines...")
@@ -602,17 +421,13 @@ for i in range(num_surfs):
 
 # Create non-matching problem
 nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, comm=worldcomm)
-# nonmatching_opt.cp_shapes = cp_shapes
-
 opt_field = [0,2]
 shopt_surf_inds = [[1], [1]]
 
 nonmatching_opt.set_shopt_surf_inds(opt_field=opt_field, 
                                     shopt_surf_inds=shopt_surf_inds)
 nonmatching_opt.get_init_CPIGA()
-
 nonmatching_opt.set_geom_preprocessor(preprocessor)
-
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
 
 if mpirank == 0:
@@ -620,23 +435,6 @@ if mpirank == 0:
 nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
                     preprocessor.intersections_para_coords, 
                     penalty_coefficient, 2)
-
-
-# nonmatching_opt.set_geom_preprocessor(preprocessor)
-
-
-# nonmatching_opt.set_shopt_surf_inds(opt_field=opt_field, shopt_surf_inds=shopt_surf_inds)
-# nonmatching_opt.get_init_CPIGA()
-# # nonmatching_opt.set_shopt_align_CP(align_surf_inds=[[1], [1]],
-# #                                    align_dir=[[1], [1]])
-                                   
-# nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
-
-# if mpirank == 0:
-#     print("Setting up mortar meshes...")
-# nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
-#                     preprocessor.intersections_para_coords, 
-#                     penalty_coefficient, 2)
 
 pressure = -Constant(1.)
 f = as_vector([Constant(0.), Constant(0.), pressure])
@@ -652,18 +450,14 @@ for s_ind in range(nonmatching_opt.num_splines):
                   E, nu, h_th, source_terms[s_ind])]
 nonmatching_opt.set_residuals(residuals)
 
-
-#################################
 preprocessor.check_intersections_type()
 preprocessor.get_diff_intersections()
-num_edge_pts = [1]*1
+num_edge_pts = [1]*len(preprocessor.diff_int_inds)
 nonmatching_opt.create_diff_intersections(num_edge_pts=num_edge_pts)
-#################################
 
 cpsurfd2a = CPSurfDesign2Analysis(preprocessor, opt_field=opt_field, 
             shopt_surf_inds=shopt_surf_inds)
-
-
+# Order elevation setup
 p_list_x = [[3,1],]*len(shopt_surf_inds[0])
 p_list_z = [[1,1],]*len(shopt_surf_inds[1])
 init_p_list = [p_list_x,p_list_z]
@@ -675,7 +469,7 @@ for field_ind, field in enumerate(opt_field):
                         [0]*(p[1]+1)+[1]*(p[1]+1)]]
     init_knots_list += [knots_list]
 
-
+# Knot refinement setup
 p_ele = [3,3]
 p_list_ele = [] 
 for field_ind, field in enumerate(opt_field):
@@ -694,44 +488,17 @@ for field_ind, field in enumerate(opt_field):
 
 # Optimize x, y and z direction
 cpsurfd2a.set_init_knots_by_field(init_p_list, init_knots_list)
-a0 = cpsurfd2a.set_order_elevation_by_field(p_list_ele, knots_list_ele)
-a1 = cpsurfd2a.set_knot_refinement()
-a2 = cpsurfd2a.get_init_cp_coarse()
+cpsurfd2a.set_order_elevation_by_field(p_list_ele, knots_list_ele)
+cpsurfd2a.set_knot_refinement()
+cpsurfd2a.get_init_cp_coarse()
 
-# t00 = cpsurfd2a.set_cp_align(field=0, align_dir_list=[[0,1]])
-t00 = cpsurfd2a.set_cp_align(field=0, align_dir_list=[1])
-t00 = cpsurfd2a.set_cp_align(field=2, align_dir_list=[1])
-
-
-
-
-
-# #################################
-# preprocessor.check_intersections_type()
-# preprocessor.get_diff_intersections()
-# nonmatching_opt.create_diff_intersections()
-# #################################
-
-
-# cpsurfd2a = CPSurfDesign2Analysis(preprocessor, opt_field=opt_field, 
-#             shopt_surf_inds=shopt_surf_inds)
-# design_degree = [3,1]
-# p_list = [[design_degree]*len(shopt_surf_inds[0]), 
-#           [design_degree]*len(shopt_surf_inds[1])]
-# design_knots = [[0]*(design_degree[0]+1)+[1]*(design_degree[0]+1),
-#                 [0]*(design_degree[1]+1)+[1]*(design_degree[1]+1)]
-# knots_list = [[design_knots]*len(shopt_surf_inds[0]), 
-#               [design_knots]*len(shopt_surf_inds[1])]
-
-# cpsurfd2a.set_init_knots(p_list, knots_list)
-# cpsurfd2a.get_init_cp_coarse()
-# t0 = cpsurfd2a.set_cp_align(0, [1])
-# t0 = cpsurfd2a.set_cp_align(2, [1])
-# t1 = cpsurfd2a.set_cp_regu(2, [0], rev_dir=True)
+cpsurfd2a.set_cp_align(field=0, align_dir_list=[1])
+cpsurfd2a.set_cp_align(field=2, align_dir_list=[1])
 
 # Set up optimization
-nonmatching_opt.create_files(save_path=save_path, 
-                             folder_name=folder_name)
+if save_files:
+    nonmatching_opt.create_files(save_path=save_path, 
+                                 folder_name=folder_name)
 model = ShapeOptGroup(nonmatching_opt=nonmatching_opt,
                       cpdesign2analysis=cpsurfd2a)
 model.init_parameters()
@@ -744,28 +511,25 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major optimality tolerance'] = 1e-6
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = './SNOPT_report/SNOPT_summary'+str(test_ind)+'.out'
-    prob.driver.opt_settings['Print file'] = './SNOPT_report/SNOPT_print'+str(test_ind)+'.out'
-    prob.driver.options['debug_print'] = ['objs', 'desvars']
+    prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
+    prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
+    # prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
     prob.driver.options['tol'] = 1e-12
     prob.driver.options['disp'] = True
-    prob.driver.options['debug_print'] = ['objs', 'desvars']
+    # prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-mesh_phy = generate_mortar_mesh(preprocessor.intersections_phy_coords[0], num_el=128)
-File('./geom/int_curve.pvd') << mesh_phy
-
 prob.setup()
-
-# raise RuntimeError
-
 prob.run_driver()
+
+if save_files:
+    nonmatching_opt.save_files()
 
 for i in range(num_surfs):
     max_F0 = np.max(nonmatching_opt.splines[i].cpFuncs[0].vector().get_local())
