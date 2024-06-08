@@ -16,12 +16,13 @@ def np_normalize(vec):
     return vec/np.linalg.norm(vec)
 
 class CPIGA2Xi(object):
-    def __init__(self, preprocessor, opt_surf_inds, opt_field, num_edge_pts=None):
-    # def __init__(self, preprocessor, diff_int_inds=None, opt_field=[0,1,2]):
+    def __init__(self, preprocessor, opt_surf_inds, opt_field, 
+                 num_edge_pts=None):
         """
         preprocessor : PENGoLINS.preprocessor instance
-        diff_int_inds : list of ints, the indices of intersections to differentiate
-            if None, differentiate all intersections (not recommended)
+        opt_surf_inds : list of ints
+        opt_field: list of ints
+        num_edge_pts : list of ints
         """
         self.preprocessor = preprocessor
         self.occ_surfs_all = self.preprocessor.BSpline_surfs
@@ -34,7 +35,7 @@ class CPIGA2Xi(object):
             self.occ_surfs_all = self.preprocessor.BSpline_surfs_refine
             self.occ_surfs_all_data = self.preprocessor.BSpline_surfs_refine_data
 
-        # Define basic paramters
+        # Define basic parameters
         self.num_field = 3
         self.para_dim = 2
         self.num_end_pts = 2
@@ -108,7 +109,9 @@ class CPIGA2Xi(object):
         self.bsplines = [BSplines.BSpline(surf_data.degree, surf_data.knots)
                          for surf_data in self.occ_int_surfs_data]
 
-        #### Parametric coordinates related properties
+        ###########################################
+        # Parametric coordinates related properties 
+        ###########################################
         self.diff_int_num_pts = []
         for int_ind, int_ind_global in enumerate(self.diff_int_inds):
             self.diff_int_num_pts += [self.preprocessor.mortar_nels[int_ind_global]+1]
@@ -138,10 +141,6 @@ class CPIGA2Xi(object):
         # Find end points and values
         self.end_xi_ind = np.zeros((len(self.diff_int_inds), self.num_end_pts), dtype='int32')
         self.end_xi_val = np.zeros((len(self.diff_int_inds), self.num_end_pts))
-
-        # # Find end points and values
-        # self.end_xi_ind = np.zeros((len(self.diff_int_inds), self.num_end_pts), dtype='int32')
-        # self.end_xi_val = np.zeros((len(self.diff_int_inds), self.num_end_pts))
 
         for int_ind, int_ind_global in enumerate(self.diff_int_inds):
             num_pts = self.diff_int_num_pts[int_ind]
@@ -199,7 +198,6 @@ class CPIGA2Xi(object):
                     self.end_xi_val[int_ind, end_ind] = 1.
 
         self.get_surf_avg_normal_dir()
-
         self.num_edge_pts = num_edge_pts
         self.get_diff_intersections_edge_cons_info(num_edge_pts=self.num_edge_pts)
 
@@ -278,13 +276,6 @@ class CPIGA2Xi(object):
                 self.int_edge_cons_dofs_list_full += [cons_dofs_temp]
                 self.int_edge_cons_vals_list_full += [cons_vals_temp]
                 self.int_edge_cons_local_dofs_list_full += [cons_local_dofs_temp]
-                # if num_edge_pts is not None:
-                #     if not isinstance(num_edge_pts, list):
-                #         if num_edge_pts > cons_dofs_temp.size:
-                #             num_edge_pts = cons_dofs_temp.size
-                #     local_cons_ind = np.linspace(0,cons_dofs_temp.size-1,num_edge_pts, dtype='int32')
-                # else:
-                #     local_cons_ind = np.arange(0,cons_dofs_temp.size, dtype='int32')
                 if num_edge_pts is None:
                     num_edge_pts_temp = cons_dofs_temp.size
                 else:
@@ -425,8 +416,6 @@ class CPIGA2Xi(object):
         -------
         res : ndarray: size: num_pts*4
         """
-        # print("=="*20, int_ind)
-
         num_pts = self.diff_int_num_pts[int_ind]
         xi_coords = xi_flat_sub.reshape(-1, self.para_dim)
         res = np.zeros(xi_flat_sub.size)
@@ -512,7 +501,7 @@ class CPIGA2Xi(object):
         return res_full
 
     def solve_xi(self, xi_flat_init, rtol=1e-5, max_iter=200):
-        print("Solving intersections parametric coordinates ...")
+        # print("Solving intersections parametric coordinates ...")
         num_pts = 9
         num_ints = 2
         xi_init = xi_flat_init.reshape(-1,2)
@@ -521,7 +510,6 @@ class CPIGA2Xi(object):
             for side in range(2):
                 xi_init_list[i] += [xi_init[i*num_pts*2+side*num_pts:
                                       i*num_pts*2+(side+1)*num_pts,:]]
-        solver = 'fsolve'
 
         # import matplotlib.pyplot as plt
         # plt.figure()
@@ -537,8 +525,8 @@ class CPIGA2Xi(object):
         # plt.xlabel('xi0')
         # plt.xlabel('xi1')
         # plt.title('xi before solve')
-        # # plt.show()
 
+        solver = 'fsolve'
         if solver == 'fsolve':
             xi_root = fsolve(self.residual, x0=xi_flat_init, fprime=self.dRdxi)
         else:
@@ -575,32 +563,6 @@ class CPIGA2Xi(object):
 
                 xi_root += dxi
                 iter_ind += 1
-
-
-        # print("xi after solve:", xi_root.reshape(-1,2))
-
-        # xi_root_temp = xi_root.reshape(-1,2)
-        # xi_root_list = [[] for i in range(num_ints)]
-        # for i in range(num_ints):
-        #     for side in range(2):
-        #         xi_root_list[i] += [xi_root_temp[i*num_pts*2+side*num_pts:
-        #                               i*num_pts*2+(side+1)*num_pts,:]]
-        
-        # import matplotlib.pyplot as plt
-        # plt.figure()
-        # for i in range(num_ints):
-        #     for side in range(2):
-        #         if side == 0:
-        #             line_style = '-*'
-        #         else:
-        #             line_style = '-^'
-        #         plt.plot(xi_root_list[i][side][:,0], xi_root_list[i][side][:,1], 
-        #                 line_style, label=f'int: {i}, sdie: {side}')
-        # plt.legend()
-        # plt.xlabel('xi0')
-        # plt.xlabel('xi1')
-        # plt.title('xi after solve')
-        # plt.show()
         return xi_root
 
 
@@ -682,13 +644,6 @@ class CPIGA2Xi(object):
 
             # For lower section:
             if i > 0 and i < num_pts-1:
-                # deriv_xi[i+ur-1, (i-1)*lb_size[1]:i*lb_size[1]] = \
-                #     2*np.dot(FAi-FAil, dFAildxi)
-                # deriv_xi[i+ur-1, i*lb_size[1]:(i+1)*lb_size[1]] = \
-                #     -2*np.dot(FAir-FAil, dFAidxi)
-                # deriv_xi[i+ur-1, (i+1)*lb_size[1]:(i+2)*lb_size[1]] = \
-                #     2*np.dot(FAir-FAi, dFAirdxi)
-                # int_type = self.diff_int_types[int_ind]
                 if int_type[0] == 'surf-edge':
                     side = 0
                 elif int_type[0] == 'edge-surf':
@@ -704,12 +659,6 @@ class CPIGA2Xi(object):
                     deriv_xi[i+ur-1, (i+1)*lb_size[1]:(i+2)*lb_size[1]] = \
                         2*np.dot(FAir-FAi, dFAirdxi)
                 else:
-                    # deriv_xi[i+ur-1, (i-1+num_pts)*lb_size[1]:(i+num_pts)*lb_size[1]] = \
-                    #     2*np.dot(FBi-FBil, dFBildxi)
-                    # deriv_xi[i+ur-1, (i+num_pts)*lb_size[1]:(i+1+num_pts)*lb_size[1]] = \
-                    #     -2*np.dot(FBir-FBil, dFBidxi)
-                    # deriv_xi[i+ur-1, (i+1+num_pts)*lb_size[1]:(i+2+num_pts)*lb_size[1]] = \
-                    #     2*np.dot(FBir-FBi, dFBirdxi)
                     deriv_xi[i+ur-1, lc+(i-1)*lb_size[1]:lc+(i)*lb_size[1]] = \
                         2*np.dot(FBi-FBil, dFBildxi)
                     deriv_xi[i+ur-1, lc+(i)*lb_size[1]:lc+(i+1)*lb_size[1]] = \
@@ -729,12 +678,6 @@ class CPIGA2Xi(object):
         for int_ind, int_ind_global in enumerate(self.diff_int_inds):
             xi_flat_sub = xi_flat[self.xi_flat_inds[int_ind]:
                                   self.xi_flat_inds[int_ind+1]]
-            # print("*"*50, int_ind)
-            # print("*"*50, len(xi_flat_sub))
-            # print("*"*50, self.end_xi_ind)
-            # if len(self.int_edge_cons_local_dofs_list[int_ind]) > 0:
-            #     xi_flat_sub[self.int_edge_cons_local_dofs_list[int_ind]] = \
-            #         self.int_edge_cons_vals_list[int_ind]
             self.dRdxi_list[int_ind][int_ind] = self.dRdxi_sub(int_ind, 
                                            xi_flat_sub, coo=True)
         dRdxi_full = bmat(self.dRdxi_list, format='coo')
@@ -776,11 +719,6 @@ class CPIGA2Xi(object):
 
             for side in range(self.num_sides):
                 surf_ind = int_surf_inds[side]
-                # ###############################################
-                # surf_ind_temp = int_surf_inds[side]
-                # surf_ind = self.int_surf_inds[surf_ind_temp]
-                # ###############################################
-                # if surf_ind in self.opt_surf_inds[self.opt_field.index(field)]:
                 xi_coords_temp = xi_coords[int(i+num_pts*side), 
                                            0:self.para_dim]
                 if side == 0: #deriv_side:
@@ -812,11 +750,6 @@ class CPIGA2Xi(object):
             if i > 0 and i < num_pts-1:
                 side = deriv_side
                 surf_ind = int_surf_inds[side]
-                # ################################################
-                # surf_ind_temp = int_surf_inds[side]
-                # surf_ind = self.int_surf_inds[surf_ind_temp]
-                # ################################################
-                # if surf_ind in self.opt_surf_inds[self.opt_field.index(field)]:
                 xi_coords_il = xi_coords[i-1, 0:self.para_dim]
                 xi_coords_i = xi_coords[i, 0:self.para_dim]
                 xi_coords_ir = xi_coords[i+1, 0:self.para_dim]
@@ -824,9 +757,6 @@ class CPIGA2Xi(object):
                 Fil = self.F(surf_ind, xi_coords_il)
                 Fi = self.F(surf_ind, xi_coords_i)
                 Fir = self.F(surf_ind, xi_coords_ir)
-                # res_vec = 2*(np.dot(Fir, dFdcpir) - np.dot(Fir, dFdcpi) 
-                #            - np.dot(Fi, dFdcpir) + np.dot(Fi, dFdcpil) 
-                #            + np.dot(Fil, dFdcpi) - np.dot(Fil, dFdcpil))
                 res_vec = 2*(np.dot(Fir-Fi, dFdcpir-dFdcpi) 
                            - np.dot(Fi-Fil, dFdcpi-dFdcpil))
                 deriv_cp[side][u_size+i-1, 0:self.cp_sizes[surf_ind]] = res_vec
@@ -858,16 +788,6 @@ class CPIGA2Xi(object):
                 dRdCP_list[int_ind][col_ind1] = dRdCP_sub_temp[1]
                 dRdCP_sub_col_sizes[col_ind1] = dRdCP_sub_temp[1].shape[1]
 
-            #################################################################
-            # # Old implementation, TODO: double check index
-            # dRdCP_sub_temp = self.dRdCP_sub(int_ind, xi_flat_sub, field, coo=True)
-            # if int_surf_ind0 in self.opt_surf_inds[field_ind]:
-            #     col_ind0 = self.opt_surf_inds[field_ind].index(int_surf_ind0)
-            #     dRdCP_list[int_ind][col_ind0] = dRdCP_sub_temp[0]
-            # if int_surf_ind1 in self.opt_surf_inds[field_ind]:
-            #     col_ind1 = self.opt_surf_inds[field_ind].index(int_surf_ind1)
-            #     dRdCP_list[int_ind][col_ind1] = dRdCP_sub_temp[1]
-
         for int_ind, int_ind_global in enumerate(self.diff_int_inds):
             if dRdCP_list[int_ind].count(None) == len(dRdCP_list[int_ind]):
                 temp_mat = coo_matrix(np.zeros((dRdCP_sub_row_sizes[int_ind],
@@ -883,15 +803,13 @@ class CPIGA2Xi(object):
 
 
 
-
 if __name__ == '__main__':
     # from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
     from PENGoLINS.occ_preprocessing import *
 
     # filename_igs = "./tests/geometry/init_Tbeam_geom_moved.igs"
-    # filename_igs = "./tests/geometry/init_Tbeam_geom_curved_4patch.igs"
-    filename_igs = "/home/han/OneDrive/github/GOLDFISH/demos_om/shape_opt_mint/rib_test/geometry/box_geom_init_1ribs.igs"
+    filename_igs = "./tests/geometry/init_Tbeam_geom_curved_4patch.igs"
     igs_shapes = read_igs_file(filename_igs, as_compound=False)
     occ_surf_list = [topoface2surface(face, BSpline=True) 
                      for face in igs_shapes]
@@ -903,13 +821,6 @@ if __name__ == '__main__':
     preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
                                     refine=False)
     print("Computing intersections...")
-    # int_data_filename = "int_data.npz"
-    # if os.path.isfile(int_data_filename):
-    #     preprocessor.load_intersections_data(int_data_filename)
-    # else:
-    #     preprocessor.compute_intersections(mortar_refine=2)
-    #     preprocessor.save_intersections_data(int_data_filename)
-
     preprocessor.compute_intersections(mortar_refine=2)
     if mpirank == 0:
         print("Total DoFs:", preprocessor.total_DoFs)
@@ -920,28 +831,6 @@ if __name__ == '__main__':
 
     cpiga2xi = CPIGA2Xi(preprocessor)
 
-    # For 5 patches
-    # int_surf_ind0 = 0
-    # int_surf_ind1 = 1
-    # int_ind = 0
-    # field = 1
-    # xi = [0.55, 0.66]
-
-    # aa = cpiga2xi.F_occ(int_surf_ind0, xi)
-    # ab = cpiga2xi.F(int_surf_ind0, xi)
-    # ac = cpiga2xi.dFdxi(int_surf_ind1, xi)
-    # ad = cpiga2xi.dFdCP(int_surf_ind1, xi, field)
-    # xi_flat_sub = cpiga2xi.xis_flat[int_ind] + np.random.random(cpiga2xi.xi_sizes[int_ind])*1e-2
-    # xi_flat = xi_flat_sub
-    # ae = cpiga2xi.residual_sub(int_ind, xi_flat_sub)
-    # af = cpiga2xi.residual(xi_flat)
-    # ag = cpiga2xi.dRdxi_sub(int_ind, xi_flat_sub)
-    # ah = cpiga2xi.dRdCP_sub(int_ind, xi_flat_sub, field)
-    # dRdxi = cpiga2xi.dRdxi(xi_flat)
-    # dRdCP = cpiga2xi.dRdCP(xi_flat, field)
-    # xi_root = cpiga2xi.solve_xi(xi_flat)
-
-
     # For 4 patches
     int_surf_ind0 = 0
     int_surf_ind1 = 2
@@ -950,10 +839,6 @@ if __name__ == '__main__':
     field = 1
     xi = [0.55, 0.66]
 
-    # aa = cpiga2xi.F_occ(int_surf_ind0, xi)
-    # ab = cpiga2xi.F(int_surf_ind0, xi)
-    # ac = cpiga2xi.dFdxi(int_surf_ind1, xi)
-    # ad = cpiga2xi.dFdCP(int_surf_ind1, xi, field)
     # xi_flat_sub = cpiga2xi.xis_flat[int_diff_ind] + np.random.random(cpiga2xi.xi_sizes[int_diff_ind])*1e-2
     xi_flat = np.concatenate(cpiga2xi.xis_flat) #+ np.random.random(np.sum(cpiga2xi.xi_sizes))*1e-2
     # ae = cpiga2xi.residual_sub(int_ind, xi_flat_sub)
@@ -963,200 +848,3 @@ if __name__ == '__main__':
     dRdxi = cpiga2xi.dRdxi(xi_flat)
     dRdCP = cpiga2xi.dRdCP(xi_flat, field)
     # xi_root = cpiga2xi.solve_xi(xi_flat)
-
-
-# class SplineBC(object):
-#     """
-#     Setting Dirichlet boundary condition to tIGAr spline generator.
-#     """
-#     def __init__(self, directions=[0,1], sides=[[0,1],[0,1]], 
-#                  fields=[[[0,1,2],[0,1,2]],[[0,1,2],[0,1,2]]],
-#                  n_layers=[[1,1],[1,1]]):
-#         self.fields = fields
-#         self.directions = directions
-#         self.sides = sides
-#         self.n_layers = n_layers
-
-#     def set_bc(self, spline_generator):
-#         for direction in self.directions:
-#             for side in self.sides[direction]:
-#                 for field in self.fields[direction][side]:
-#                     scalar_spline = spline_generator.getScalarSpline(field)
-#                     side_dofs = scalar_spline.getSideDofs(direction,
-#                                 side, nLayers=self.n_layers[direction][side])
-#                     spline_generator.addZeroDofs(field, side_dofs)
-
-# def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3, 
-#                            spline_bc=None, index=0):
-#     """
-#     Generate ExtractedBSpline from OCC B-spline surface.
-#     """
-#     quad_deg = surface.UDegree()*quad_deg_const
-#     # DIR = SAVE_PATH+"spline_data/extraction_"+str(index)+"_init"
-#     # spline = ExtractedSpline(DIR, quad_deg)
-#     spline_mesh = NURBSControlMesh4OCC(surface, useRect=False)
-#     spline_generator = EqualOrderSpline(worldcomm, num_field, spline_mesh)
-#     if spline_bc is not None:
-#         spline_bc.set_bc(spline_generator)
-#     # spline_generator.writeExtraction(DIR)
-#     spline = ExtractedSpline(spline_generator, quad_deg)
-#     return spline
-
-# test_ind = 3
-# optimizer = 'SNOPT'
-# # optimizer = 'SLSQP'
-# opt_field = [0]
-# # save_path = './'
-# save_path = '/home/han/Documents/test_results/'
-# # save_path = '/Users/hanzhao/Documents/test_results/'
-# # folder_name = "results/"
-# folder_name = "results"+str(test_ind)+"/"
-
-# filename_igs = "./geometry/box_geom_init_1ribs.igs"
-# igs_shapes = read_igs_file(filename_igs, as_compound=False)
-# occ_surf_list_all = [topoface2surface(face, BSpline=True) 
-#                  for face in igs_shapes]
-# occ_surf_list = [occ_surf_list_all[i] for i in range(len(occ_surf_list_all))]
-# occ_surf_data_list = [BSplineSurfaceData(surf) for surf in occ_surf_list]
-# num_surfs = len(occ_surf_list)
-# p = occ_surf_data_list[0].degree[0]
-
-# # Define material and geometric parameters
-# E = Constant(1.0e12)
-# nu = Constant(0.)
-# h_th = Constant(0.1)
-# penalty_coefficient = 1.0e3
-# pressure = Constant(1.)
-
-# fields0 = [[[0,1,2]], None,]
-# spline_bc0 = SplineBC(directions=[0], sides=[[0], None],
-#                       fields=fields0, n_layers=[[1], None])
-# spline_bcs = [spline_bc0]*4+[None]*4
-
-# # Geometry preprocessing and surface-surface intersections computation
-# preprocessor = OCCPreprocessing(occ_surf_list, reparametrize=False, 
-#                                 refine=False)
-# print("Computing intersections...")
-# # int_data_filename = "int_data.npz"
-# # if os.path.isfile(int_data_filename):
-# #     preprocessor.load_intersections_data(int_data_filename)
-# # else:
-# #     preprocessor.compute_intersections(mortar_refine=2)
-# #     preprocessor.save_intersections_data(int_data_filename)
-
-# preprocessor.compute_intersections(mortar_refine=1)
-# if mpirank == 0:
-#     print("Total DoFs:", preprocessor.total_DoFs)
-#     print("Number of intersections:", preprocessor.num_intersections_all)
-
-# # # Display B-spline surfaces and intersections using 
-# # # PythonOCC build-in 3D viewer.
-# # display, start_display, add_menu, add_function_to_menu = init_display()
-# # preprocessor.display_surfaces(display, save_fig=False)
-# # preprocessor.display_intersections(display, color='RED', save_fig=False)
-
-# # print(aaa)
-
-
-# if mpirank == 0:
-#     print("Creating splines...")
-# # Create tIGAr extracted spline instances
-# splines = []
-# for i in range(num_surfs):
-#         spline = OCCBSpline2tIGArSpline(preprocessor.BSpline_surfs[i], 
-#                                         spline_bc=spline_bcs[i], index=i)
-#         splines += [spline,]
-
-# # Create non-matching problem
-# nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, 
-#                                     opt_field=opt_field, comm=worldcomm)
-# nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
-
-# if mpirank == 0:
-#     print("Setting up mortar meshes...")
-# nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
-#                     preprocessor.intersections_para_coords, 
-#                     penalty_coefficient, 2)
-# pressure = -Constant(1.)
-# f = as_vector([Constant(0.), Constant(0.), pressure])
-# source_terms = []
-# residuals = []
-# for s_ind in range(nonmatching_opt.num_splines):
-#     z = nonmatching_opt.splines[s_ind].rationalize(
-#         nonmatching_opt.spline_test_funcs[s_ind])
-#     source_terms += [inner(f, z)*nonmatching_opt.splines[s_ind].dx]
-#     residuals += [SVK_residual(nonmatching_opt.splines[s_ind], 
-#                   nonmatching_opt.spline_funcs[s_ind], 
-#                   nonmatching_opt.spline_test_funcs[s_ind], 
-#                   E, nu, h_th, source_terms[s_ind])]
-# nonmatching_opt.set_residuals(residuals)
-
-# nonmatching_opt.solve_nonlinear_nonmatching_problem()
-# # print(aaa)
-
-# # shopt_multi_ffd_inds = [[0,1,2,3,4], [5,6,7]]
-# shopt_multi_ffd_inds = [[0,1,2,3,4], [5]]
-# nonmatching_opt.set_shopt_multiFFD_surf_inds(shopt_multi_ffd_inds)
-
-# #################################################
-# num_shopt_ffd = nonmatching_opt.num_shopt_ffd
-# shopt_ffd_lims_multiffd = nonmatching_opt.shopt_cpsurf_lims_multiffd
-
-# shopt_ffd_num_el = [[1,1,1], [2,1,1]]
-# shopt_ffd_p = [2]*num_shopt_ffd
-# extrude_dir = [1,0]
-
-# shopt_ffd_block_list = []
-# for ffd_ind in range(num_shopt_ffd):
-#     field = extrude_dir[ffd_ind]
-#     cp_range = shopt_ffd_lims_multiffd[ffd_ind][field][1]\
-#               -shopt_ffd_lims_multiffd[ffd_ind][field][0]
-#     shopt_ffd_lims_multiffd[ffd_ind][field][1] = \
-#         shopt_ffd_lims_multiffd[ffd_ind][field][1] + 0.1*cp_range
-#     shopt_ffd_lims_multiffd[ffd_ind][field][0] = \
-#         shopt_ffd_lims_multiffd[ffd_ind][field][0] - 0.1*cp_range
-#     shopt_ffd_block_list += [create_3D_block(shopt_ffd_num_el[ffd_ind],
-#                                        shopt_ffd_p[ffd_ind],
-#                                        shopt_ffd_lims_multiffd[ffd_ind])]
-
-# for ffd_ind in range(num_shopt_ffd):
-#     vtk_writer = VTKWriter()
-#     vtk_writer.write("./geometry/tbeam_shopt_ffd_block_init"+str(ffd_ind)+".vtk", 
-#                      shopt_ffd_block_list[ffd_ind])
-#     vtk_writer.write_cp("./geometry/tbeam_shopt_ffd_cp_init"+str(ffd_ind)+".vtk", 
-#                      shopt_ffd_block_list[ffd_ind])
-
-# shopt_ffd_knots_list = [ffd_block.knots for ffd_block 
-#                         in shopt_ffd_block_list]
-# shopt_ffd_control_list = [ffd_block.control for ffd_block 
-#                           in shopt_ffd_block_list]
-# print("Setting multiple shape FFD blocks ...")
-# nonmatching_opt.set_shopt_multiFFD(shopt_ffd_knots_list, 
-#                                        shopt_ffd_control_list)
-
-# ########### Set constraints info #########
-# a0 = nonmatching_opt.set_shopt_regu_CP_multiFFD(shopt_regu_dir_list=[[None, None], 
-#                                                                 [None, None]], 
-#                                            shopt_regu_side_list=[[None, None], 
-#                                                                  [None, None]])
-# a1 = nonmatching_opt.set_shopt_pin_CP_multiFFD(0, pin_dir0_list=['whole', None], 
-#                                           pin_side0_list=None,
-#                                           pin_dir1_list=None, 
-#                                           pin_side1_list=None)
-# # a2 = nonmatching_opt.set_shopt_pin_CP_multiFFD(2, pin_dir0_list=['whole', None], 
-# #                                           pin_side0_list=None,
-# #                                           pin_dir1_list=None, 
-# #                                           pin_side1_list=None)
-# # a2 = nonmatching_opt.set_shopt_pin_CP_multiFFD(2, pin_dir0_list=[0, None], 
-# #                                           pin_side0_list=[[0,1], None],
-# #                                           pin_dir1_list=None, 
-# #                                           pin_side1_list=None)
-# a3 = nonmatching_opt.set_shopt_align_CP_multiFFD(shopt_align_dir_list=[1,1])
-
-# #################################################
-
-# #################################
-# preprocessor.check_intersections_type()
-# preprocessor.get_diff_intersections()
-# nonmatching_opt.set_diff_intersections(preprocessor)
-# #################################

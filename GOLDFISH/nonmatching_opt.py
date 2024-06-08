@@ -4,77 +4,6 @@ from GOLDFISH.utils.bsp_utils import *
 
 from GOLDFISH.cpiga2xi import *
 
-def Lambda_tilde(R, num_pts, phy_dim, para_dim, order=0):
-    """
-    order = 0 or 1
-    """
-    R_mat = zero_petsc_mat(num_pts*para_dim, 
-            num_pts*phy_dim*para_dim**(order+1), PREALLOC=R.size)
-
-    if order == 0:
-        for i in range(num_pts):
-            for j in range(phy_dim):
-                row_ind0 = i*para_dim
-                row_ind1 = i*para_dim+1
-                col_ind0 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)
-                col_ind1 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+1
-                vec_ind0 = i*phy_dim*para_dim**order + j*para_dim**order
-                R_mat.setValue(row_ind0, col_ind0, R[vec_ind0])
-                R_mat.setValue(row_ind1, col_ind1, R[vec_ind0])
-    elif order == 1:
-        for i in range(num_pts):
-            for j in range(phy_dim):
-                row_ind0 = i*para_dim
-                row_ind1 = i*para_dim+1
-                col_ind00 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)
-                col_ind01 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+1
-                col_ind10 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+2
-                col_ind11 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+3
-                vec_ind0 = i*phy_dim*para_dim**order + j*para_dim**order
-                vec_ind1 = i*phy_dim*para_dim**order + j*para_dim**order+1
-                R_mat.setValue(row_ind0, col_ind00, R[vec_ind0])
-                R_mat.setValue(row_ind0, col_ind01, R[vec_ind1])
-                R_mat.setValue(row_ind1, col_ind10, R[vec_ind0])
-                R_mat.setValue(row_ind1, col_ind11, R[vec_ind1])
-    else:
-        raise RuntimeError("Order {} is not supported.".format(order))
-    R_mat.assemble()
-    return R_mat
-
-def Lambda(Au, num_pts, phy_dim, para_dim, order=1):
-    """
-    order = 1 or 2
-    """
-    if order == 1:
-        Au_mat = zero_petsc_mat(num_pts*phy_dim, num_pts*para_dim, 
-                                PREALLOC=Au.size)
-        for i in range(num_pts):
-            for j in range(phy_dim):
-                row_ind = i*phy_dim+j
-                col_ind0 = i*para_dim
-                col_ind1 = i*para_dim+1
-                vec_ind0 = i*para_dim*phy_dim+j*para_dim
-                vec_ind1 = i*para_dim*phy_dim+j*para_dim+1
-                Au_mat.setValue(row_ind, col_ind0, Au[vec_ind0])
-                Au_mat.setValue(row_ind, col_ind1, Au[vec_ind1])
-    elif order == 2:
-        Au_mat = zero_petsc_mat(num_pts*phy_dim*para_dim, num_pts*para_dim, 
-                                PREALLOC=Au.size)
-        for i in range(num_pts):
-            for j in range(phy_dim):
-                for k in range(para_dim):
-                    row_ind = i*phy_dim*para_dim+j*para_dim+k
-                    col_ind0 = i*para_dim
-                    col_ind1 = i*para_dim + 1
-                    vec_ind0 = i*phy_dim*para_dim**order+j*para_dim**order+k*para_dim
-                    vec_ind1 = i*phy_dim*para_dim**order+j*para_dim**order+k*para_dim+1
-                    Au_mat.setValue(row_ind, col_ind0, Au[vec_ind0])
-                    Au_mat.setValue(row_ind, col_ind1, Au[vec_ind1])
-    else:
-        raise RuntimeError("Order {} is not supported.".format(order))
-    Au_mat.assemble()
-    return Au_mat
-
 class NonMatchingOpt(NonMatchingCoupling):
     """
     Subclass of NonmatchingCoupling which serves as the base class
@@ -601,72 +530,6 @@ class NonMatchingOpt(NonMatchingCoupling):
         """
         update_nest_vec(h_th_array, self.h_th_nest, comm=self.comm)
 
-    # def set_diff_intersections(self, preprocessor):
-    #     """
-    #     This function is noly needed when differentiating intersections'
-    #     parametric coordiantes, and requires the class ``CPIGA2Xi``
-    #     """
-    #     assert self.transfer_mat_deriv == 2
-    #     self.preprocessor = preprocessor
-    #     self.cpiga2xi = CPIGA2Xi(preprocessor, self.shopt_surf_inds, self.opt_field)
-    #     self.diff_int_inds = self.preprocessor.diff_int_inds
-    #     self.Vms_2dim = [VectorFunctionSpace(
-    #                      self.mortar_meshes[diff_int_ind], 'CG', 1)
-    #                      for diff_int_ind in self.diff_int_inds]
-    #     self.xi_funcs = []
-    #     self.xi_vecs = []
-    #     for i, diff_int_ind in enumerate(self.diff_int_inds):
-    #         self.xi_funcs += [Function(self.Vms_2dim[i]),
-    #                           Function(self.Vms_2dim[i])]
-    #         self.xi_vecs += [v2p(self.xi_funcs[-2].vector()),
-    #                          v2p(self.xi_funcs[-1].vector())]
-    #     self.xi_nest = create_nest_PETScVec(self.xi_vecs, comm=self.comm)
-    #     self.update_xi(self.cpiga2xi.xi_flat_global)
-    #     self.xi_size = self.cpiga2xi.xi_size_global
-
-    # def get_diff_intersections_edge_cons_info(self):
-    #     """
-    #     Return the dofs and values for edge intersections.
-    #     """
-    #     int_edge_cons_dofs_list = []
-    #     int_edge_cons_vals_list = []
-    #     for i, diff_int_ind in enumerate(self.diff_int_inds):
-    #         int_type = self.preprocessor.intersections_type[diff_int_ind]
-    #         print("int_type:", int_type)
-    #         # if 'surf' not in int_type:
-    #         if int_type[0] == 'surf-edge' or int_type[0] == 'edge_surf':
-    #             edge_indicator = self.preprocessor.diff_int_edge_cons[i]
-    #             side = int(edge_indicator[edge_indicator.index('-')-1])
-    #             para_dir = int(edge_indicator[edge_indicator.index('-')+1])
-    #             edge_val = int(edge_indicator[edge_indicator.index('.')+1])
-    #             if side == 0:
-    #                 start_ind = self.cpiga2xi.xi_flat_inds[i]
-    #                 end_ind = int((self.cpiga2xi.xi_flat_inds[i]
-    #                           +self.cpiga2xi.xi_flat_inds[i+1])/2)
-    #             elif side == 1:
-    #                 start_ind = int((self.cpiga2xi.xi_flat_inds[i]
-    #                           +self.cpiga2xi.xi_flat_inds[i+1])/2)
-    #                 end_ind = self.cpiga2xi.xi_flat_inds[i+1]
-    #             else:
-    #                 raise ValueError("Unknown side value: {}".format(side))
-    #             if para_dir == 1:
-    #                 start_ind += 1
-    #             cons_dofs_temp = np.arange(start_ind, end_ind, self.npd)
-    #             cons_vals_temp = np.ones(cons_dofs_temp.size)*edge_val
-    #             int_edge_cons_dofs_list += [cons_dofs_temp]
-    #             int_edge_cons_vals_list += [cons_vals_temp]
-    #     self.int_edge_cons_dofs = np.concatenate(int_edge_cons_dofs_list, 
-    #                                              dtype='int32')
-    #     self.int_edge_cons_vals = np.concatenate(int_edge_cons_vals_list)
-
-    #     self.int_xi_free_dofs = []
-    #     for i in range(self.cpiga2xi.xi_size_global):
-    #         if i not in self.int_edge_cons_dofs:
-    #             self.int_xi_free_dofs += [i]
-                
-    #     return self.int_edge_cons_dofs, self.int_edge_cons_vals
-
-
     def create_diff_intersections(self, num_edge_pts=None):
         """
         This function is noly needed when differentiating intersections'
@@ -690,31 +553,31 @@ class NonMatchingOpt(NonMatchingCoupling):
         self.update_xi(self.cpiga2xi.xi_flat_global)
         self.xi_size = self.cpiga2xi.xi_size_global
 
-    def update_xi_old(self, xi_flat):
-        """
-        Update intersections' parametric coordinates
-        """
-        sub_vecs = self.xi_nest.getNestSubVecs()
-        num_sub_vecs = len(sub_vecs)
+    # def update_xi_old(self, xi_flat):
+    #     """
+    #     Update intersections' parametric coordinates
+    #     """
+    #     sub_vecs = self.xi_nest.getNestSubVecs()
+    #     num_sub_vecs = len(sub_vecs)
 
-        sub_vecs_range = []
-        sub_vecs_size = []
-        for i in range(num_sub_vecs):
-            sub_vecs_range += [sub_vecs[i].getOwnershipRange(),]
-            sub_vecs_size += [sub_vecs[i].size,]
+    #     sub_vecs_range = []
+    #     sub_vecs_size = []
+    #     for i in range(num_sub_vecs):
+    #         sub_vecs_range += [sub_vecs[i].getOwnershipRange(),]
+    #         sub_vecs_size += [sub_vecs[i].size,]
 
-        sub_array_list = []
-        array_ind_off = 0
-        for i in range(num_sub_vecs):
-            sub_array = xi_flat[array_ind_off+sub_vecs_range[i][0]: 
-                                  array_ind_off+sub_vecs_range[i][1]]
-            sub_array = sub_array.reshape(-1, self.npd)
-            sub_array = sub_array[::-1].reshape(-1)
-            sub_array_list += [sub_array,]
-            array_ind_off += sub_vecs_size[i]
-        nest_array = np.concatenate(sub_array_list)
-        self.xi_nest.setArray(nest_array)
-        self.xi_nest.assemble()
+    #     sub_array_list = []
+    #     array_ind_off = 0
+    #     for i in range(num_sub_vecs):
+    #         sub_array = xi_flat[array_ind_off+sub_vecs_range[i][0]: 
+    #                               array_ind_off+sub_vecs_range[i][1]]
+    #         sub_array = sub_array.reshape(-1, self.npd)
+    #         sub_array = sub_array[::-1].reshape(-1)
+    #         sub_array_list += [sub_array,]
+    #         array_ind_off += sub_vecs_size[i]
+    #     nest_array = np.concatenate(sub_array_list)
+    #     self.xi_nest.setArray(nest_array)
+    #     self.xi_nest.assemble()
 
     def update_xi(self, xi_flat):
         """
@@ -1219,7 +1082,7 @@ class NonMatchingOpt(NonMatchingCoupling):
                 row_sizes = m2p(self.splines[s_ind].M).sizes[1]
                 col_sizes = 2*num_pts # TODO: This size doesn't work in parallel
                 self.dRIGAdxi_list[s_ind][0] = zero_petsc_mat(row_sizes, col_sizes,
-                                          comm=self.comm)
+                                               comm=self.comm)
 
         dRIGAdxi_mat = create_nest_PETScMat(self.dRIGAdxi_list, comm=self.comm)
         return dRIGAdxi_mat
@@ -1252,382 +1115,331 @@ class NonMatchingOpt(NonMatchingCoupling):
             self.alpha_d_list[index], self.alpha_r_list[index], 
             proj_tan=proj_tan)
 
-        # print("Step 1 ", "*"*30)
-        # Get extraction, transfer matrices, displacements, control point functions
+        ####################################################
+        # Get extraction, transfer matrices, displacements, 
+        # control point functions
+        ####################################################
         # Off-diagonal
-        self.Mo = m2p(self.splines[mapping_list[index][other_side]].M)
-        self.A0o = m2p(self.transfer_matrices_list[index][other_side][0])
-        self.A1o = m2p(self.transfer_matrices_list[index][other_side][1])
+        Mo = m2p(self.splines[mapping_list[index][other_side]].M)
+        A0o = m2p(self.transfer_matrices_list[index][other_side][0])
+        A1o = m2p(self.transfer_matrices_list[index][other_side][1])
 
-        self.u0Mo = self.mortar_funcs[index][other_side][0]
-        self.u1Mo = self.mortar_funcs[index][other_side][1]
+        u0Mo = self.mortar_funcs[index][other_side][0]
+        u1Mo = self.mortar_funcs[index][other_side][1]
 
         # Diagonal
-        self.M = m2p(self.splines[mapping_list[index][side]].M)
-        self.A0 = m2p(self.transfer_matrices_list[index][side][0])
-        self.A1 = m2p(self.transfer_matrices_list[index][side][1])
-        self.A2 = m2p(self.transfer_matrices_list[index][side][2])
-        self.A1c = m2p(self.transfer_matrices_control_list[index][side][1])
-        self.A2c = m2p(self.transfer_matrices_control_list[index][side][2])
+        M = m2p(self.splines[mapping_list[index][side]].M)
+        A0 = m2p(self.transfer_matrices_list[index][side][0])
+        A1 = m2p(self.transfer_matrices_list[index][side][1])
+        A2 = m2p(self.transfer_matrices_list[index][side][2])
+        A1c = m2p(self.transfer_matrices_control_list[index][side][1])
+        A2c = m2p(self.transfer_matrices_control_list[index][side][2])
 
-        self.u0M = self.mortar_funcs[index][side][0]
-        self.u1M = self.mortar_funcs[index][side][1]
-        self.P0M = self.mortar_cpfuncs[index][side][0]
-        self.P1M = self.mortar_cpfuncs[index][side][1]
-        self.uFE = self.spline_funcs[mapping_list[index][side]]
-        self.PFE = self.splines[mapping_list[index][side]].cpFuncs
-
-        ###################################
-        # print("Step 2 ", "*"*30)
-        # Derivatives of penalty energy
-        # Off-diagonal
-        self.R_pen0Mo = derivative(PE, self.u0Mo)
-        self.R_pen1Mo = derivative(PE, self.u1Mo)
-        self.R_pen0Mo_vec = v2p(assemble(self.R_pen0Mo))
-        self.R_pen1Mo_vec = v2p(assemble(self.R_pen1Mo))
-        
-        # Diagonal
-        self.R_pen0M = derivative(PE, self.u0M)
-        self.R_pen1M = derivative(PE, self.u1M)
-        self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-        self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-        self.R_pen0M_mat = Lambda_tilde(self.R_pen0M_vec, num_pts, self.nsd, self.npd, 0)
-        self.R_pen1M_mat = Lambda_tilde(self.R_pen1M_vec, num_pts, self.nsd, self.npd, 1)
-
-        self.der_mat_FE_diag = self.A1.transposeMatMult(self.R_pen0M_mat.transpose())
-        self.der_mat_FE_diag += self.A2.transposeMatMult(self.R_pen1M_mat.transpose())
-
-        #############################
-        # print("Step 3 ", "*"*30)
-        # Derivatives for mortar displacements
-        # Off-diagonal
-        self.dR0Modu0M = derivative(self.R_pen0Mo, self.u0M)
-        self.dR0Modu1M = derivative(self.R_pen0Mo, self.u1M)
-        self.dR1Modu0M = derivative(self.R_pen1Mo, self.u0M)
-        self.dR1Modu1M = derivative(self.R_pen1Mo, self.u1M)
-        self.dR0Modu0M_mat = m2p(assemble(self.dR0Modu0M))
-        self.dR0Modu1M_mat = m2p(assemble(self.dR0Modu1M))
-        self.dR1Modu0M_mat = m2p(assemble(self.dR1Modu0M))
-        self.dR1Modu1M_mat = m2p(assemble(self.dR1Modu1M))
-        self.A1u_vec = A_x(self.A1, self.uFE)
-        self.A2u_vec = A_x(self.A2, self.uFE)
-        self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.npd, order=1)
-        self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.npd, order=2)
-
-        temp_mat = self.A0o.transposeMatMult(self.dR0Modu0M_mat) + \
-                   self.A1o.transposeMatMult(self.dR1Modu0M_mat)
-        self.der_mat_FE_offdiag = temp_mat.matMult(self.A1u_mat)
-
-        temp_mat = self.A0o.transposeMatMult(self.dR0Modu1M_mat) + \
-                   self.A1o.transposeMatMult(self.dR1Modu1M_mat)
-        self.der_mat_FE_offdiag += temp_mat.matMult(self.A2u_mat)
-
-        # Diagonal
-        self.dR0Mdu0M = derivative(self.R_pen0M, self.u0M)
-        self.dR0Mdu1M = derivative(self.R_pen0M, self.u1M)
-        self.dR1Mdu0M = derivative(self.R_pen1M, self.u0M)
-        self.dR1Mdu1M = derivative(self.R_pen1M, self.u1M)
-        self.dR0Mdu0M_mat = m2p(assemble(self.dR0Mdu0M))
-        self.dR0Mdu1M_mat = m2p(assemble(self.dR0Mdu1M))
-        self.dR1Mdu0M_mat = m2p(assemble(self.dR1Mdu0M))
-        self.dR1Mdu1M_mat = m2p(assemble(self.dR1Mdu1M))
-        # self.A1u_vec = A_x(self.A1, self.uFE)
-        # self.A2u_vec = A_x(self.A2, self.uFE)
-        # self.A1u_mat = Lambda(self.A1u_vec, num_pts, self.nsd, self.npd, order=1)
-        # self.A2u_mat = Lambda(self.A2u_vec, num_pts, self.nsd, self.npd, order=2)
-
-        temp_mat = self.A0.transposeMatMult(self.dR0Mdu0M_mat) + \
-                   self.A1.transposeMatMult(self.dR1Mdu0M_mat)
-        self.der_mat_FE_diag += temp_mat.matMult(self.A1u_mat)
-
-        temp_mat = self.A0.transposeMatMult(self.dR0Mdu1M_mat) + \
-                   self.A1.transposeMatMult(self.dR1Mdu1M_mat)
-        self.der_mat_FE_diag += temp_mat.matMult(self.A2u_mat)
-
+        u0M = self.mortar_funcs[index][side][0]
+        u1M = self.mortar_funcs[index][side][1]
+        P0M = self.mortar_cpfuncs[index][side][0]
+        P1M = self.mortar_cpfuncs[index][side][1]
+        uFE = self.spline_funcs[mapping_list[index][side]]
+        PFE = self.splines[mapping_list[index][side]].cpFuncs
 
         ###############################
-        # For derivatives w.r.t. mortar control points
-        # print("Step 4 ", "*"*30)
+        # Derivatives of penalty energy 
+        ###############################
         # Off-diagonal
-        self.dR0ModP0M_list = []
-        self.dR0ModP1M_list = []
-        self.dR1ModP0M_list = []
-        self.dR1ModP1M_list = []
-        self.dR0ModP0M_mat_list = []
-        self.dR0ModP1M_mat_list = []
-        self.dR1ModP0M_mat_list = []
-        self.dR1ModP1M_mat_list = []
-        self.A1cP_vec_list = []
-        self.A2cP_vec_list = []
-        self.A1cP_mat_list = []
-        self.A2cP_mat_list = []
-        self.temp_mat1_list_offdiag = []
-        self.temp_mat2_list_offdiag = []
+        R_pen0Mo = derivative(PE, u0Mo)
+        R_pen1Mo = derivative(PE, u1Mo)
+        R_pen0Mo_vec = v2p(assemble(R_pen0Mo))
+        R_pen1Mo_vec = v2p(assemble(R_pen1Mo))
+        
         # Diagonal
-        self.dR0MdP0M_list = []
-        self.dR0MdP1M_list = []
-        self.dR1MdP0M_list = []
-        self.dR1MdP1M_list = []
-        self.dR0MdP0M_mat_list = []
-        self.dR0MdP1M_mat_list = []
-        self.dR1MdP0M_mat_list = []
-        self.dR1MdP1M_mat_list = []
-        self.A1cP_vec_list = []
-        self.A2cP_vec_list = []
-        self.A1cP_mat_list = []
-        self.A2cP_mat_list = []
-        self.temp_mat1_list_diag = []
-        self.temp_mat2_list_diag = []
+        R_pen0M = derivative(PE, u0M)
+        R_pen1M = derivative(PE, u1M)
+        R_pen0M_vec = v2p(assemble(R_pen0M))
+        R_pen1M_vec = v2p(assemble(R_pen1M))
+        R_pen0M_mat = self.R_vec2mat(R_pen0M_vec, num_pts, self.nsd, self.npd, 0)
+        R_pen1M_mat = self.R_vec2mat(R_pen1M_vec, num_pts, self.nsd, self.npd, 1)
 
-        for i in range(len(self.PFE)):
+        der_mat_FE_diag = A1.transposeMatMult(R_pen0M_mat.transpose())
+        der_mat_FE_diag += A2.transposeMatMult(R_pen1M_mat.transpose())
+
+        ######################################
+        # Derivatives for mortar displacements 
+        ######################################
+        # Off-diagonal
+        dR0Modu0M = derivative(R_pen0Mo, u0M)
+        dR0Modu1M = derivative(R_pen0Mo, u1M)
+        dR1Modu0M = derivative(R_pen1Mo, u0M)
+        dR1Modu1M = derivative(R_pen1Mo, u1M)
+        dR0Modu0M_mat = m2p(assemble(dR0Modu0M))
+        dR0Modu1M_mat = m2p(assemble(dR0Modu1M))
+        dR1Modu0M_mat = m2p(assemble(dR1Modu0M))
+        dR1Modu1M_mat = m2p(assemble(dR1Modu1M))
+        A1u_vec = A_x(A1, uFE)
+        A2u_vec = A_x(A2, uFE)
+        A1u_mat = self.Au_vec2mat(A1u_vec, num_pts, self.nsd, self.npd, order=1)
+        A2u_mat = self.Au_vec2mat(A2u_vec, num_pts, self.nsd, self.npd, order=2)
+
+        temp_mat = A0o.transposeMatMult(dR0Modu0M_mat) + \
+                   A1o.transposeMatMult(dR1Modu0M_mat)
+        der_mat_FE_offdiag = temp_mat.matMult(A1u_mat)
+
+        temp_mat = A0o.transposeMatMult(dR0Modu1M_mat) + \
+                   A1o.transposeMatMult(dR1Modu1M_mat)
+        der_mat_FE_offdiag += temp_mat.matMult(A2u_mat)
+
+        # Diagonal
+        dR0Mdu0M = derivative(R_pen0M, u0M)
+        dR0Mdu1M = derivative(R_pen0M, u1M)
+        dR1Mdu0M = derivative(R_pen1M, u0M)
+        dR1Mdu1M = derivative(R_pen1M, u1M)
+        dR0Mdu0M_mat = m2p(assemble(dR0Mdu0M))
+        dR0Mdu1M_mat = m2p(assemble(dR0Mdu1M))
+        dR1Mdu0M_mat = m2p(assemble(dR1Mdu0M))
+        dR1Mdu1M_mat = m2p(assemble(dR1Mdu1M))
+
+        temp_mat = A0.transposeMatMult(dR0Mdu0M_mat) + \
+                   A1.transposeMatMult(dR1Mdu0M_mat)
+        der_mat_FE_diag += temp_mat.matMult(A1u_mat)
+
+        temp_mat = A0.transposeMatMult(dR0Mdu1M_mat) + \
+                   A1.transposeMatMult(dR1Mdu1M_mat)
+        der_mat_FE_diag += temp_mat.matMult(A2u_mat)
+
+
+        ##############################################
+        # For derivatives w.r.t. mortar control points 
+        ##############################################
+        # Off-diagonal
+        dR0ModP0M_list = []
+        dR0ModP1M_list = []
+        dR1ModP0M_list = []
+        dR1ModP1M_list = []
+        dR0ModP0M_mat_list = []
+        dR0ModP1M_mat_list = []
+        dR1ModP0M_mat_list = []
+        dR1ModP1M_mat_list = []
+        A1cP_vec_list = []
+        A2cP_vec_list = []
+        A1cP_mat_list = []
+        A2cP_mat_list = []
+        temp_mat1_list_offdiag = []
+        temp_mat2_list_offdiag = []
+        # Diagonal
+        dR0MdP0M_list = []
+        dR0MdP1M_list = []
+        dR1MdP0M_list = []
+        dR1MdP1M_list = []
+        dR0MdP0M_mat_list = []
+        dR0MdP1M_mat_list = []
+        dR1MdP0M_mat_list = []
+        dR1MdP1M_mat_list = []
+        A1cP_vec_list = []
+        A2cP_vec_list = []
+        A1cP_mat_list = []
+        A2cP_mat_list = []
+        temp_mat1_list_diag = []
+        temp_mat2_list_diag = []
+
+        for i in range(len(PFE)):
             # Off-diagonal
-            self.dR0ModP0M_list += [derivative(self.R_pen0Mo, self.P0M[i])]
-            self.dR0ModP1M_list += [derivative(self.R_pen0Mo, self.P1M[i])]
-            self.dR1ModP0M_list += [derivative(self.R_pen1Mo, self.P0M[i])]
-            self.dR1ModP1M_list += [derivative(self.R_pen1Mo, self.P1M[i])]
-            self.dR0ModP0M_mat_list += [m2p(assemble(self.dR0ModP0M_list[i]))]
-            self.dR0ModP1M_mat_list += [m2p(assemble(self.dR0ModP1M_list[i]))]
-            self.dR1ModP0M_mat_list += [m2p(assemble(self.dR1ModP0M_list[i]))]
-            self.dR1ModP1M_mat_list += [m2p(assemble(self.dR1ModP1M_list[i]))]
-            self.temp_mat1_list_offdiag += [self.A0o.transposeMatMult(self.dR0ModP0M_mat_list[i]) 
-                               + self.A1o.transposeMatMult(self.dR1ModP0M_mat_list[i])]
-            self.temp_mat2_list_offdiag += [self.A0o.transposeMatMult(self.dR0ModP1M_mat_list[i]) 
-                               + self.A1o.transposeMatMult(self.dR1ModP1M_mat_list[i])]
-            self.A1cP_vec_list += [A_x(self.A1c, self.PFE[i])]
-            self.A1cP_mat_list += [Lambda(self.A1cP_vec_list[i], num_pts, 
+            dR0ModP0M_list += [derivative(R_pen0Mo, P0M[i])]
+            dR0ModP1M_list += [derivative(R_pen0Mo, P1M[i])]
+            dR1ModP0M_list += [derivative(R_pen1Mo, P0M[i])]
+            dR1ModP1M_list += [derivative(R_pen1Mo, P1M[i])]
+            dR0ModP0M_mat_list += [m2p(assemble(dR0ModP0M_list[i]))]
+            dR0ModP1M_mat_list += [m2p(assemble(dR0ModP1M_list[i]))]
+            dR1ModP0M_mat_list += [m2p(assemble(dR1ModP0M_list[i]))]
+            dR1ModP1M_mat_list += [m2p(assemble(dR1ModP1M_list[i]))]
+            temp_mat1_list_offdiag += [A0o.transposeMatMult(dR0ModP0M_mat_list[i]) 
+                               + A1o.transposeMatMult(dR1ModP0M_mat_list[i])]
+            temp_mat2_list_offdiag += [A0o.transposeMatMult(dR0ModP1M_mat_list[i]) 
+                               + A1o.transposeMatMult(dR1ModP1M_mat_list[i])]
+            A1cP_vec_list += [A_x(A1c, PFE[i])]
+            A1cP_mat_list += [self.Au_vec2mat(A1cP_vec_list[i], num_pts, 
                                           1, self.npd, 1)]
-            self.A2cP_vec_list += [A_x(self.A2c, self.PFE[i])]
-            self.A2cP_mat_list += [Lambda(self.A2cP_vec_list[i], num_pts, 
+            A2cP_vec_list += [A_x(A2c, PFE[i])]
+            A2cP_mat_list += [self.Au_vec2mat(A2cP_vec_list[i], num_pts, 
                                           1, self.npd, 2)]
-            self.der_mat_FE_offdiag += self.temp_mat1_list_offdiag[i].matMult(self.A1cP_mat_list[i])
-            self.der_mat_FE_offdiag += self.temp_mat2_list_offdiag[i].matMult(self.A2cP_mat_list[i])
+            der_mat_FE_offdiag += temp_mat1_list_offdiag[i].matMult(A1cP_mat_list[i])
+            der_mat_FE_offdiag += temp_mat2_list_offdiag[i].matMult(A2cP_mat_list[i])
 
             # Diagonal
-            self.dR0MdP0M_list += [derivative(self.R_pen0M, self.P0M[i])]
-            self.dR0MdP1M_list += [derivative(self.R_pen0M, self.P1M[i])]
-            self.dR1MdP0M_list += [derivative(self.R_pen1M, self.P0M[i])]
-            self.dR1MdP1M_list += [derivative(self.R_pen1M, self.P1M[i])]
-            self.dR0MdP0M_mat_list += [m2p(assemble(self.dR0MdP0M_list[i]))]
-            self.dR0MdP1M_mat_list += [m2p(assemble(self.dR0MdP1M_list[i]))]
-            self.dR1MdP0M_mat_list += [m2p(assemble(self.dR1MdP0M_list[i]))]
-            self.dR1MdP1M_mat_list += [m2p(assemble(self.dR1MdP1M_list[i]))]
-            self.temp_mat1_list_diag += [self.A0.transposeMatMult(self.dR0MdP0M_mat_list[i]) 
-                               + self.A1.transposeMatMult(self.dR1MdP0M_mat_list[i])]
-            self.temp_mat2_list_diag += [self.A0.transposeMatMult(self.dR0MdP1M_mat_list[i]) 
-                               + self.A1.transposeMatMult(self.dR1MdP1M_mat_list[i])]
-            # self.A1cP_vec_list += [A_x(self.A1c, self.PFE[i])]
-            # self.A1cP_mat_list += [Lambda(self.A1cP_vec_list[i], num_pts, 
-            #                               1, self.npd, 1)]
-            # self.A2cP_vec_list += [A_x(self.A2c, self.PFE[i])]
-            # self.A2cP_mat_list += [Lambda(self.A2cP_vec_list[i], num_pts, 
-            #                               1, self.npd, 2)]
-            self.der_mat_FE_diag += self.temp_mat1_list_diag[i].matMult(self.A1cP_mat_list[i])
-            self.der_mat_FE_diag += self.temp_mat2_list_diag[i].matMult(self.A2cP_mat_list[i])
+            dR0MdP0M_list += [derivative(R_pen0M, P0M[i])]
+            dR0MdP1M_list += [derivative(R_pen0M, P1M[i])]
+            dR1MdP0M_list += [derivative(R_pen1M, P0M[i])]
+            dR1MdP1M_list += [derivative(R_pen1M, P1M[i])]
+            dR0MdP0M_mat_list += [m2p(assemble(dR0MdP0M_list[i]))]
+            dR0MdP1M_mat_list += [m2p(assemble(dR0MdP1M_list[i]))]
+            dR1MdP0M_mat_list += [m2p(assemble(dR1MdP0M_list[i]))]
+            dR1MdP1M_mat_list += [m2p(assemble(dR1MdP1M_list[i]))]
+            temp_mat1_list_diag += [A0.transposeMatMult(dR0MdP0M_mat_list[i]) 
+                               + A1.transposeMatMult(dR1MdP0M_mat_list[i])]
+            temp_mat2_list_diag += [A0.transposeMatMult(dR0MdP1M_mat_list[i]) 
+                               + A1.transposeMatMult(dR1MdP1M_mat_list[i])]
+            der_mat_FE_diag += temp_mat1_list_diag[i].matMult(A1cP_mat_list[i])
+            der_mat_FE_diag += temp_mat2_list_diag[i].matMult(A2cP_mat_list[i])
 
-
-        #####################
-        # print("Step 5 ", "*"*30)
-        # For derivatives w.r.t. parametric coordinates
+        ###############################################
+        # For derivatives w.r.t. parametric coordinates 
+        ###############################################
         # Off-diagonal
-        self.xi_m = SpatialCoordinate(self.mortar_meshes[index])
-        self.dR0Modxi_m = derivative(self.R_pen0Mo, self.xi_m)
-        self.dR1Modxi_m = derivative(self.R_pen1Mo, self.xi_m)
-        self.dR0Modxi_m_mat = m2p(assemble(self.dR0Modxi_m))
-        self.dR1Modxi_m_mat = m2p(assemble(self.dR1Modxi_m))
+        xi_m = SpatialCoordinate(self.mortar_meshes[index])
+        dR0Modxi_m = derivative(R_pen0Mo, xi_m)
+        dR1Modxi_m = derivative(R_pen1Mo, xi_m)
+        dR0Modxi_m_mat = m2p(assemble(dR0Modxi_m))
+        dR1Modxi_m_mat = m2p(assemble(dR1Modxi_m))
 
-        self.der_mat_FE_offdiag += self.A0o.transposeMatMult(self.dR0Modxi_m_mat)
-        self.der_mat_FE_offdiag += self.A1o.transposeMatMult(self.dR1Modxi_m_mat)
+        der_mat_FE_offdiag += A0o.transposeMatMult(dR0Modxi_m_mat)
+        der_mat_FE_offdiag += A1o.transposeMatMult(dR1Modxi_m_mat)
 
         # Diagonal
-        self.xi_m = SpatialCoordinate(self.mortar_meshes[index])
-        self.dR0Mdxi_m = derivative(self.R_pen0M, self.xi_m)
-        self.dR1Mdxi_m = derivative(self.R_pen1M, self.xi_m)
-        self.dR0Mdxi_m_mat = m2p(assemble(self.dR0Mdxi_m))
-        self.dR1Mdxi_m_mat = m2p(assemble(self.dR1Mdxi_m))
+        xi_m = SpatialCoordinate(self.mortar_meshes[index])
+        dR0Mdxi_m = derivative(R_pen0M, xi_m)
+        dR1Mdxi_m = derivative(R_pen1M, xi_m)
+        dR0Mdxi_m_mat = m2p(assemble(dR0Mdxi_m))
+        dR1Mdxi_m_mat = m2p(assemble(dR1Mdxi_m))
 
-        self.der_mat_FE_diag += self.A0.transposeMatMult(self.dR0Mdxi_m_mat)
-        self.der_mat_FE_diag += self.A1.transposeMatMult(self.dR1Mdxi_m_mat)
-
-        #######################
-        # print("Step 6 ", "*"*30)
-        # off-diagonal
-        self.der_mat_FE_offdiag.assemble()
-        # Diagonal
-        self.der_mat_FE_diag.assemble()
+        der_mat_FE_diag += A0.transposeMatMult(dR0Mdxi_m_mat)
+        der_mat_FE_diag += A1.transposeMatMult(dR1Mdxi_m_mat)
 
         #######################
-        # print("Step 7 ", "*"*30)
         # Off-diagonal
-        self.der_mat_IGA_rev_offdiag = self.Mo.transposeMatMult(self.der_mat_FE_offdiag)
-        self.der_mat_IGA_rev_offdiag.assemble()
+        der_mat_FE_offdiag.assemble()
         # Diagonal
-        self.der_mat_IGA_rev_diag = self.M.transposeMatMult(self.der_mat_FE_diag)
-        self.der_mat_IGA_rev_diag.assemble()
+        der_mat_FE_diag.assemble()
 
         #######################
-        # print("Step 8 ", "*"*30)
         # Off-diagonal
-        self.switch_col_mat = zero_petsc_mat(num_pts*self.npd, num_pts*self.npd, 
+        der_mat_IGA_rev_offdiag = Mo.transposeMatMult(der_mat_FE_offdiag)
+        der_mat_IGA_rev_offdiag.assemble()
+        # Diagonal
+        der_mat_IGA_rev_diag = M.transposeMatMult(der_mat_FE_diag)
+        der_mat_IGA_rev_diag.assemble()
+
+        #######################
+        # Off-diagonal
+        switch_col_mat = zero_petsc_mat(num_pts*self.npd, num_pts*self.npd, 
                                              PREALLOC=num_pts*self.npd)
         for i in range(num_pts):
-            self.switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, 1.)
-            self.switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, 1.)
-            # self.switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, -1.)
-            # self.switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, -1.)
-        self.switch_col_mat.assemble()
-        self.der_mat_IGA_offdiag = self.der_mat_IGA_rev_offdiag.matMult(self.switch_col_mat)
+            switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, 1.)
+            switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, 1.)
+            # switch_col_mat.setValue(i*self.npd, num_pts*self.npd-i*self.npd-2, -1.)
+            # switch_col_mat.setValue(i*self.npd+1, num_pts*self.npd-i*self.npd-1, -1.)
+        switch_col_mat.assemble()
+        der_mat_IGA_offdiag = der_mat_IGA_rev_offdiag.matMult(switch_col_mat)
 
         # Diagonal
-        self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag.matMult(self.switch_col_mat)
+        der_mat_IGA_diag = der_mat_IGA_rev_diag.matMult(switch_col_mat)
 
         # # No coloum switch
-        # self.der_mat_IGA_offdiag = self.der_mat_IGA_rev_offdiag
-        # self.der_mat_IGA_diag = self.der_mat_IGA_rev_diag
-
+        # der_mat_IGA_offdiag = der_mat_IGA_rev_offdiag
+        # der_mat_IGA_diag = der_mat_IGA_rev_diag
         if side == 0:
-            dRIGAdxi_sub = [self.der_mat_IGA_diag, self.der_mat_IGA_offdiag]
+            dRIGAdxi_sub = [der_mat_IGA_diag, der_mat_IGA_offdiag]
         elif side == 1:
-            dRIGAdxi_sub = [self.der_mat_IGA_offdiag, self.der_mat_IGA_diag]
+            dRIGAdxi_sub = [der_mat_IGA_offdiag, der_mat_IGA_diag]
         return dRIGAdxi_sub
 
 
-    # def dRIGAdxi_FD_diag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
+    def R_vec2mat(self, R, num_pts, phy_dim, para_dim, order=0):
+        """
+        Arrange input vector ``R`` into a diagonal matrix to 
+        avoid tensor-vector multiplication. 
+        Note: corresponds to "lambda_tilde" in the formulation 
 
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
+        Parameters
+        ---------- 
+        R : PETSc vec
+        num_pts : int
+        phy_dim : int
+        para_dim : int
+        order : int, 0 or 1
 
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][side][1])
-    #         self.u0M = self.mortar_funcs[index][side][0]
-    #         self.u1M = self.mortar_funcs[index][side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
+        Returns
+        -------
+        R_mat : PETSc mat
+        """
+        R_mat = zero_petsc_mat(num_pts*para_dim, 
+                num_pts*phy_dim*para_dim**(order+1), PREALLOC=R.size)
 
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][side]].M.size(1),
-    #                            self.mesh_coord_init.size))
+        if order == 0:
+            for i in range(num_pts):
+                for j in range(phy_dim):
+                    row_ind0 = i*para_dim
+                    row_ind1 = i*para_dim+1
+                    col_ind0 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)
+                    col_ind1 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+1
+                    vec_ind0 = i*phy_dim*para_dim**order + j*para_dim**order
+                    R_mat.setValue(row_ind0, col_ind0, R[vec_ind0])
+                    R_mat.setValue(row_ind1, col_ind1, R[vec_ind0])
+        elif order == 1:
+            for i in range(num_pts):
+                for j in range(phy_dim):
+                    row_ind0 = i*para_dim
+                    row_ind1 = i*para_dim+1
+                    col_ind00 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)
+                    col_ind01 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+1
+                    col_ind10 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+2
+                    col_ind11 = i*(phy_dim*para_dim**(order+1))+j*para_dim**(order+1)+3
+                    vec_ind0 = i*phy_dim*para_dim**order + j*para_dim**order
+                    vec_ind1 = i*phy_dim*para_dim**order + j*para_dim**order+1
+                    R_mat.setValue(row_ind0, col_ind00, R[vec_ind0])
+                    R_mat.setValue(row_ind0, col_ind01, R[vec_ind1])
+                    R_mat.setValue(row_ind1, col_ind10, R[vec_ind0])
+                    R_mat.setValue(row_ind1, col_ind11, R[vec_ind1])
+        else:
+            raise RuntimeError("Order {} is not supported.".format(order))
+        R_mat.assemble()
+        return R_mat
 
-    #     R_init = R()[:]
+    def Au_vec2mat(self, Au, num_pts, phy_dim, para_dim, order=1):
+        """
+        Arrange input vector ``Au`` into a matrix to represent the 
+        result of tensor-vector multiplication so that we can 
+        avoid the construction of the 3D matrix
+        Note: corresponds to "lambda" in the formulation 
 
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
+        Parameters
+        ----------
+        Au : PETSc vector
+        num_pts : int
+        phy_dim : int
+        para_dim : int
+        order : int, 1 or 2
 
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
-
-    # def dRIGAdxi_FD_offdiag_sub(self, index=0, side=0, h=1e-8):
-    #     """
-    #     index : index of intersetion
-    #     side : side of mortar mesh for two intersecting surfaces {0,1}
-    #     """
-    #     if side == 0:
-    #         proj_tan = False
-    #     else:
-    #         proj_tan = True
-    #         # proj_tan = False
-
-    #     other_side = int(1 - side)
-    #     residuals = self.residuals
-    #     self.num_pts = self.mortar_meshes[index].coordinates().shape[0]
-    #     # dx_m = dx(metadata=self.nonmatching.int_dx_metadata)
-    #     mapping_list = self.mapping_list
-    #     s_ind0, s_ind1 = self.mapping_list[index]
-    #     self.PE = penalty_energy(self.splines[s_ind0], self.splines[s_ind1], 
-    #         self.spline_funcs[s_ind0], self.spline_funcs[s_ind1], 
-    #         self.mortar_meshes[index], 
-    #         self.mortar_funcs[index], self.mortar_cpfuncs[index], 
-    #         self.transfer_matrices_list[index],
-    #         self.transfer_matrices_control_list[index],
-    #         self.alpha_d_list[index], self.alpha_r_list[index], 
-    #         proj_tan=proj_tan)
-    #     mortar_mesh = self.mortar_meshes[index]
-
-    #     def R():
-    #         self.RSFE = v2p(assemble(residuals[self.mapping_list[index][other_side]]))
-    #         self.M = m2p(self.splines[mapping_list[index][other_side]].M)
-    #         self.A0 = m2p(self.transfer_matrices_list[index][other_side][0])
-    #         self.A1 = m2p(self.transfer_matrices_list[index][other_side][1])
-    #         self.u0M = self.mortar_funcs[index][other_side][0]
-    #         self.u1M = self.mortar_funcs[index][other_side][1]
-    #         self.R_pen0M = derivative(self.PE, self.u0M)
-    #         self.R_pen1M = derivative(self.PE, self.u1M)
-    #         self.R_pen0M_vec = v2p(assemble(self.R_pen0M))
-    #         self.R_pen1M_vec = v2p(assemble(self.R_pen1M))
-    #         self.RMFE = AT_x(self.A0, self.R_pen0M_vec) + AT_x(self.A1, self.R_pen1M_vec)
-    #         self.RFE = self.RSFE + self.RMFE
-    #         self.RIGA_temp = AT_x(self.M, self.RFE)
-    #         self.RIGA_temp.assemble()
-    #         return self.RIGA_temp
-
-    #     self.num_pts = mortar_mesh.coordinates().shape[0]
-    #     self.para_dim = 2
-    #     self.mesh_coord_init = mortar_mesh.coordinates().reshape(-1).copy()
-    #     self.der_mat_IGA = np.zeros((self.splines[mapping_list[index][other_side]].M.size(1),
-    #                            self.mesh_coord_init.size))
-
-    #     R_init = R()[:]
-
-    #     # print("self.mesh_coord_init:", self.mesh_coord_init)
-    #     # print("R_init:", R_init)
-
-    #     for i in range(self.num_pts*self.para_dim):
-    #         # print("FD index:", i)
-    #         perturb = np.zeros(self.mesh_coord_init.size)
-    #         perturb[i] = h
-    #         meshm_coord_peturb = self.mesh_coord_init + perturb
-    #         self.update_transfer_matrices_sub(meshm_coord_peturb.reshape(-1,2), index, side)
-    #         R_perturb = R()[:]
-    #         R_diff = R_perturb - R_init
-    #         # if i < 5:
-    #         #     print("i:", i, ", R_diff:", R_diff)
-    #         self.der_mat_IGA[:,i] = R_diff/h
-    #     return self.der_mat_IGA
-
+        Returns
+        -------
+        Au_mat : PETSc mat
+        """
+        if order == 1:
+            Au_mat = zero_petsc_mat(num_pts*phy_dim, num_pts*para_dim, 
+                                    PREALLOC=Au.size)
+            for i in range(num_pts):
+                for j in range(phy_dim):
+                    row_ind = i*phy_dim+j
+                    col_ind0 = i*para_dim
+                    col_ind1 = i*para_dim+1
+                    vec_ind0 = i*para_dim*phy_dim+j*para_dim
+                    vec_ind1 = i*para_dim*phy_dim+j*para_dim+1
+                    Au_mat.setValue(row_ind, col_ind0, Au[vec_ind0])
+                    Au_mat.setValue(row_ind, col_ind1, Au[vec_ind1])
+        elif order == 2:
+            Au_mat = zero_petsc_mat(num_pts*phy_dim*para_dim, num_pts*para_dim, 
+                                    PREALLOC=Au.size)
+            for i in range(num_pts):
+                for j in range(phy_dim):
+                    for k in range(para_dim):
+                        row_ind = i*phy_dim*para_dim+j*para_dim+k
+                        col_ind0 = i*para_dim
+                        col_ind1 = i*para_dim + 1
+                        vec_ind0 = i*phy_dim*para_dim**order+j*para_dim**order+k*para_dim
+                        vec_ind1 = i*phy_dim*para_dim**order+j*para_dim**order+k*para_dim+1
+                        Au_mat.setValue(row_ind, col_ind0, Au[vec_ind0])
+                        Au_mat.setValue(row_ind, col_ind1, Au[vec_ind1])
+        else:
+            raise RuntimeError("Order {} is not supported.".format(order))
+        Au_mat.assemble()
+        return Au_mat
 
     #######################################################
     ####### Create and save pvd files #####################

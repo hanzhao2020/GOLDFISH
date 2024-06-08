@@ -7,25 +7,30 @@ from GOLDFISH.om_comps.disp_states_comp import *
 from GOLDFISH.om_comps.volume_comp import *
 from GOLDFISH.om_comps.max_vmstress_comp import *
 
-from GOLDFISH.om_comps.cpsurf_design2full_comp import *
-# from GOLDFISH.om_comps.cpsurf_design2analysis_comp import *
-
-from GOLDFISH.om_comps.cpsurf_align_comp import *
-from GOLDFISH.om_comps.cpsurf_order_elevation_comp import *
-from GOLDFISH.om_comps.cpsurf_knot_refienment_comp import *
-from GOLDFISH.om_comps.cpsurf_regu_comp import *
-from GOLDFISH.om_comps.cpsurf_pin_comp import *
-from GOLDFISH.om_comps.cpsurf_distance_comp import *
+# Shape optimization with moving intersection components
+from GOLDFISH.om_comps.disp_states_mi_comp import *
+from GOLDFISH.om_comps.cpiga2xi_comp import *
+from GOLDFISH.om_comps.int_xi_edge_comp import *
 
 # FFD-based shape optimization compoenents
-from GOLDFISH.om_comps.cpffd_design2full_comp import *
-from GOLDFISH.om_comps.cpffd2surf_comp import *
-# from GOLDFISH.om_comps.cpffd_align_comp import *
-from GOLDFISH.om_comps.cpffd_pin_comp import *
-from GOLDFISH.om_comps.cpffd_regu_comp import *
+from GOLDFISH.om_comps.ffd_comps.cpffd_design2full_comp import *
+from GOLDFISH.om_comps.ffd_comps.cpffd2surf_comp import *
+from GOLDFISH.om_comps.ffd_comps.cpffd_align_comp import *
+from GOLDFISH.om_comps.ffd_comps.cpffd_pin_comp import *
+from GOLDFISH.om_comps.ffd_comps.cpffd_regu_comp import *
 # FFD-based thickness optimization components
-from GOLDFISH.om_comps.hth_map_comp import *
-from GOLDFISH.om_comps.hthffd2fe_comp import *
+from GOLDFISH.om_comps.ffd_comps.hth_map_comp import *
+from GOLDFISH.om_comps.ffd_comps.hthffd2fe_comp import *
+from GOLDFISH.om_comps.ffd_comps.hthffd_align_comp import *
+from GOLDFISH.om_comps.ffd_comps.hthffd_regu_comp import *
 from GOLDFISH.om_comps.hthfe2iga_comp import *
-from GOLDFISH.om_comps.hthffd_align_comp import *
-from GOLDFISH.om_comps.hthffd_regu_comp import *
+
+# # NURBS surface related components
+# from GOLDFISH.om_comps.cpsurf_design2full_comp import *
+# from GOLDFISH.om_comps.cpsurf_design2analysis_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_align_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_order_elevation_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_knot_refienment_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_regu_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_pin_comp import *
+from GOLDFISH.om_comps.surf_comps.cpsurf_distance_comp import *
