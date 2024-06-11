@@ -79,8 +79,8 @@ class CPSurfAlignComp(om.ExplicitComponent):
         self.init_cp_design = [cp.copy() for cp in self.init_cp_design_temp]
         self.derivs = [mat.copy() for mat in self.derivs_temp]
 
-        num_x_spar_input = 2
-        num_x_spar_output = 8
+        num_x_spar_input = 6
+        num_x_spar_output = 12
         x_rib_size = 4
         y_rib_input_size = 2
         field0 = 0
@@ -94,6 +94,7 @@ class CPSurfAlignComp(om.ExplicitComponent):
                                          self.input_shapes[field1]))
         self.derivs_rib_dxdy_diff = np.zeros(self.output_shapes[field0])
 
+        # sub_dxdy = np.array([[a0, 0, 0], [0, 0, b0], [a0, 0, 0], [0, 0, b0]])
         sub_dxdy = np.array([[a0, 0], [0, b0], [a0, 0], [0, b0]])
         sub_diff_vec = np.array([a1, b1, a1, b1])
         for i in range(int(self.input_shapes[field1]/y_rib_input_size)):
