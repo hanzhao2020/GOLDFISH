@@ -41,7 +41,7 @@ a0, a1 = np.linalg.solve(A0, x0)
 b0, b1 = np.linalg.solve(A0, x1)
 
 
-class CPSurfRigidAlignComp(om.ExplicitComponent):
+class CPSurfAlignComp(om.ExplicitComponent):
 
     def initialize(self):
         self.options.declare('cpdesign2analysis')
@@ -82,6 +82,7 @@ class CPSurfRigidAlignComp(om.ExplicitComponent):
         num_x_spar_input = 2
         num_x_spar_output = 8
         x_rib_size = 4
+        y_rib_input_size = 2
         field0 = 0
         field1 = 1
         self.diff_vec[field0][num_x_spar_output:] = 0
@@ -93,11 +94,12 @@ class CPSurfRigidAlignComp(om.ExplicitComponent):
                                          self.input_shapes[field1]))
         self.derivs_rib_dxdy_diff = np.zeros(self.output_shapes[field0])
 
-        sub_dxdy = np.array([a0, b0, a0, b0])
+        sub_dxdy = np.array([[a0, 0], [0, b0], [a0, 0], [0, b0]])
         sub_diff_vec = np.array([a1, b1, a1, b1])
-        for i in range(self.input_shapes[field1]):
+        for i in range(int(self.input_shapes[field1]/y_rib_input_size)):
             self.derivs_rib_dxdy[num_x_spar_output+i*x_rib_size:
-                                 num_x_spar_output+(i+1)*x_rib_size,i] = sub_dxdy
+                                 num_x_spar_output+(i+1)*x_rib_size,
+                                 i*y_rib_input_size:((i+1)*y_rib_input_size)] = sub_dxdy
             self.derivs_rib_dxdy_diff[num_x_spar_output+i*x_rib_size:
                                       num_x_spar_output+(i+1)*x_rib_size] = sub_diff_vec
 
@@ -135,3 +137,47 @@ class CPSurfRigidAlignComp(om.ExplicitComponent):
                 outputs[self.output_cp_coarse_name_list[i]] = \
                     self.derivs[i]*inputs[self.input_cp_design_name_list[i]] \
                     + self.diff_vec[i]
+
+
+if __name__ == "__main__":
+    import time
+    from datetime import datetime
+
+    import sys
+    sys.path.append("/Users/hanzhao/OneDrive/github/GOLDFISH/demos_om/shape_opt_mint/eVTOL/")
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import openmdao.api as om
+    from igakit.cad import *
+    from igakit.io import VTK
+    from GOLDFISH.nonmatching_opt_om import *
+
+    from create_geom_evtol_1spar import preprocessor
+
+
+    opt_field = [0,2]
+    shopt_surf_inds = [[3], [0,1,3]]
+    cpsurfd2a = CPSurfDesign2Analysis(preprocessor, opt_field=opt_field, 
+                shopt_surf_inds=shopt_surf_inds)
+    design_degree = [2,1]
+    p_list = [[design_degree]*len(shopt_surf_inds[0]), 
+              [design_degree]*len(shopt_surf_inds[1])]
+    design_knots = [[0]*(design_degree[0]+1)+[1]*(design_degree[0]+1),
+                    [0]*(design_degree[1]+1)+[1]*(design_degree[1]+1)]
+    knots_list = [[design_knots]*len(shopt_surf_inds[0]), 
+                  [design_knots]*len(shopt_surf_inds[1])]
+
+    cpsurfd2a.set_init_knots(p_list, knots_list)
+    cpsurfd2a.get_init_cp_coarse()
+    t0 = cpsurfd2a.set_cp_align(2, [None, 1, None])
+
+    prob = Problem()
+    comp = CPSurfStraightAlignComp(cpdesign2analysis=cpsurfd2a)
+    comp.init_parameters()
+    prob.model = comp
+    prob.setup()
+    prob.run_model()
+    prob.model.list_outputs()
+    print('check_partials:')
+    prob.check_partials(compact_print=True)

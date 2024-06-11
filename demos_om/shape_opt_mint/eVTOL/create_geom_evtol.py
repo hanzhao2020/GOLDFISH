@@ -1,3 +1,8 @@
+"""
+Initial geometry can be downloaded from the following link:
+https://drive.google.com/file/d/1IVNmFAEEMyM0p4QuEITgGMuG43UF2q5U/view?usp=sharing
+"""
+
 from PENGoLINS.occ_preprocessing import *
 from PENGoLINS.igakit_utils import *
 
