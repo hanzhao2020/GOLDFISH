@@ -276,6 +276,7 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=3,
 
 save_files = True
 optimizer = 'SNOPT'
+save_path = "./"
 folder_name = "results/"
 
 filename_igs = "./geometry/init_tube_geom_4patch.igs"
