@@ -63,8 +63,8 @@ class NonMatchingOptFFD(NonMatchingOpt):
 
         Parameters
         ----------
-        shopt_surf_inds : list of ints
         opt_field : list of ints
+        shopt_surf_inds : list of ints
         """
         self.opt_shape = True
         self.shopt_multiffd = False
@@ -177,6 +177,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
         self.shopt_init_cpffd_full = [self.shopt_cpffd_flat[:,field]
                                       for field in self.opt_field]
         self.shopt_cpffd_pin_dof = [[] for field in self.opt_field]
+        self.shopt_align_dir = [None for field in self.opt_field]
 
         return self.shopt_dcpsurf_fedcpffd
 
@@ -430,6 +431,69 @@ class NonMatchingOptFFD(NonMatchingOpt):
     # Methods for thickness optimization #
     ######################################
 
+    def set_thopt_surf_inds_FFD(self, thopt_surf_inds):
+        """
+        Set surface indicies of the single FFD block.
+
+        Parameters
+        ----------
+        thopt_surf_inds : list of ints
+        """
+        self.thopt_multiffd = False
+        self.thopt_surf_inds = thopt_surf_inds
+
+        self.thopt_cpsurf_fe_hom_list_decate = [[] for i in range(self.nsd+1)]
+        self.thopt_cpsurf_fe_hom_list = [None for i in range(self.nsd+1)]
+        for field in range(self.nsd+1):
+            for s_ind in self.thopt_surf_inds:
+                self.thopt_cpsurf_fe_hom_list_decate[field] += \
+                    [self.cpsurf_fe_hom_list_decate[field][s_ind]]
+            self.thopt_cpsurf_fe_hom_list[field] = \
+                np.concatenate(self.thopt_cpsurf_fe_hom_list_decate[field])
+
+        self.thopt_cpsurf_fe_hom_list = np.array(self.thopt_cpsurf_fe_hom_list)\
+                                      .transpose(1,0)
+
+        # CP surf fe lims, used for creation of FFD block
+        self.thopt_cpsurf_des_fe_list = [None for i in range(self.nsd)]
+        self.thopt_cpsurf_des_lims = [None for i in range(self.nsd)]
+        for field in range(self.nsd):
+                self.thopt_cpsurf_des_fe_list[field] = \
+                    self.thopt_cpsurf_fe_hom_list[:,field]\
+                    /self.thopt_cpsurf_fe_hom_list[:,-1]
+                self.thopt_cpsurf_des_lims[field] = \
+                    [np.min(self.thopt_cpsurf_des_fe_list[field]),
+                     np.max(self.thopt_cpsurf_des_fe_list[field])]
+        self.thopt_cpsurf_des_fe_list = np.array(self.thopt_cpsurf_des_fe_list)\
+                                  .transpose(1,0)
+
+        # # # Create nested control points in IGA DoFs
+        # self.thopt_cpdes_iga_list = []
+        # self.thopt_cpdes_iga_nest = None
+        # # Create nested cpFuncs vectors (in FE DoFs)
+        # self.thopt_cpdes_fe_list = []
+        # self.thopt_cpdes_fe_nest = None
+
+        # self.thopt_cpdes_iga_dofs_full_list = []
+        # ind_off = 0
+        # for s_ind in self.thopt_surf_inds:
+        #     self.thopt_cpdes_iga_list += [self.vec_scalar_iga_list[s_ind]]
+        #     self.thopt_cpdes_fe_list += [v2p(self.splines[s_ind].
+        #                                   cpFuncs[field].vector()),]
+        #     self.thopt_cpdes_iga_dofs_full_list += [list(range(ind_off, 
+        #         ind_off+self.vec_scalar_iga_dof_list[s_ind]))]
+        #     ind_off += self.vec_scalar_iga_dof_list[s_ind]
+        # self.thopt_cpdes_iga_nest = create_nest_PETScVec(
+        #     self.thopt_cpdes_iga_list, comm=self.comm)
+        # self.thopt_cpdes_fe_nest = create_nest_PETScVec(
+        #     self.thopt_cpdes_fe_list, comm=self.comm)
+
+        # self.thopt_cpdes_iga_dofs = [[dof for dof in subdof] 
+        #                              for subdof in 
+        #                              self.thopt_cpdes_iga_dofs_full_list]
+        # self.thopt_cpdes_iga_dofs_full = [np.concatenate(
+        #                              self.thopt_cpdes_iga_dofs_full_list)]
+
     def set_thopt_FFD(self, thopt_knotsffd, thopt_cpffd):
         """
         ``thopt_cpffd`` is in the igakit order convention
@@ -440,7 +504,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
         thopt_knotsffd : list of ndarray, ndarray, knots of FFD block
         thopt_cpffd : ndarray, control points of FFD block
         """
-        self.thopt_multiffd = False
+        # self.thopt_multiffd = False
         self.thopt_knotsffd = thopt_knotsffd
         self.thopt_cpffd = thopt_cpffd
         self.thopt_cpffd_flat = self.thopt_cpffd[...,0:3].transpose(2,1,0,3)\
@@ -451,8 +515,9 @@ class NonMatchingOptFFD(NonMatchingOpt):
         self.thopt_cpffd_size = np.prod(self.thopt_cpffd_shape)
         self.thopt_cpffd_design_size = self.thopt_cpffd_size
 
-        self.thopt_dcpsurf_fedcpffd = CP_FFD_matrix(self.cpsurf_fe_hom_list,
+        self.thopt_dcpsurf_fedcpffd = CP_FFD_matrix(self.thopt_cpsurf_fe_hom_list,
                     [self.thopt_ffd_degree]*self.nsd, self.thopt_knotsffd)
+        self.init_h_th_ffd = None
         return self.thopt_dcpsurf_fedcpffd
 
     def get_init_h_th_FFD(self):
@@ -595,10 +660,11 @@ class NonMatchingOptFFD(NonMatchingOpt):
         self.thopt_dcpsurf_fedcpmultiffd = coo_matrix(
                                            self.h_th_fe_reorder_mat
                                            *self.thopt_dcpsurf_fedcpmultiffd)
+        self.init_h_th_multiffd = None
         return self.thopt_dcpsurf_fedcpmultiffd
 
     def get_init_h_th_multiFFD(self):
-        if self.init_h_th_ffd is None:
+        if self.init_h_th_multiffd is None:
             init_h_th_ffd_list = []
             for i in range(len(self.thopt_dcpsurf_fedcpffd_list)):
                 dfedffd_dense = self.thopt_dcpsurf_fedcpffd_list[i].todense()
@@ -622,7 +688,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
     # Shape optimization related constraints #
     ##########################################
 
-    def set_shopt_align_CPFFD(self, align_dir):
+    def set_shopt_align_CPFFD(self, align_dir=None):
         """
         Set the direction of the FFD block to be alignment so that the 
         control points have the same coordinates along ``align_dir``.
@@ -634,17 +700,23 @@ class NonMatchingOptFFD(NonMatchingOpt):
             len(shopt_align_dir) == len(opt_field)
             for opt_field 0: shopt_align_dir[0] can be [1], [2], or [1,2]
         """
-        assert len(align_dir) == len(self.opt_field)
-        self.shopt_align_dir = align_dir
+        if align_dir is None:
+            self.shopt_align_dir = [None for field in self.opt_field]
+        else:
+            self.shopt_align_dir = align_dir
+        assert len(self.shopt_align_dir) == len(self.opt_field)
         self.shopt_dcpaligndcpffd = [coo_matrix(np.eye(self.shopt_cpffd_size)) 
                                      for field in self.opt_field]
         for field_ind, field in enumerate(self.opt_field):
-            align_dir_sub = align_dir[field_ind]
+            align_dir_sub = self.shopt_align_dir[field_ind]
             if align_dir_sub is not None:
                 free_dof, deriv_mat = self.dCPaligndCPFFD(field, align_dir_sub, 
                                       self.shopt_cpffd_shape)
-                self.shopt_cpffd_design_dof[field_ind] = free_dof
-                self.shopt_dcpaligndcpffd[field_ind] = deriv_mat
+            else:
+                free_dof = list(range(np.prod(self.shopt_cpffd_shape)))
+                deriv_mat = coo_matrix(np.eye(np.prod(self.shopt_cpffd_shape)))
+            self.shopt_cpffd_design_dof[field_ind] = free_dof
+            self.shopt_dcpaligndcpffd[field_ind] = deriv_mat
 
         self.shopt_init_cpffd_design = [self.shopt_init_cpffd_full[field_ind]
                                         [self.shopt_cpffd_design_dof[field_ind]]
@@ -718,6 +790,10 @@ class NonMatchingOptFFD(NonMatchingOpt):
                     if dof in self.shopt_cpffd_design_dof[field_ind]:
                         pin_dof_des += [dof]
                 self.shopt_cpffd_pin_dof[field_ind] += pin_dof_des
+
+        for field_ind, field in enumerate(self.opt_field):
+            self.shopt_cpffd_pin_dof[field_ind] = \
+                list(np.unique(self.shopt_cpffd_pin_dof[field_ind]))
 
         self.shopt_pin_vals = [None for field in self.opt_field]
         self.shopt_dcppindcpffd = [None for field in self.opt_field]
@@ -836,20 +912,20 @@ class NonMatchingOptFFD(NonMatchingOpt):
     # Thickness optimization related constraints #
     ##############################################
 
-    def set_thopt_align_CPFFD(self, thopt_align_dir):
+    def set_thopt_align_CPFFD(self, align_dir):
         """
         Set the direction of the FFD block to be alignment so that the 
-        control points have the same coordinates along ``thopt_align_dir``.
+        control points have the same coordinates along ``align_dir``.
         This function is used as a linear equality constraint.
 
         Parameters
         ----------
-        thopt_align_dir : int
+        align_dir : int
         """
-        if not isinstance(thopt_align_dir, list):
-            self.thopt_align_dir = [thopt_align_dir]
+        if not isinstance(align_dir, list):
+            self.thopt_align_dir = [align_dir]
         else:
-            self.thopt_align_dir = thopt_align_dir
+            self.thopt_align_dir = align_dir
         self.thopt_cp_align_size = 0
         for direction in self.thopt_align_dir:
             thopt_cp_align_size_sub = 1
@@ -859,13 +935,13 @@ class NonMatchingOptFFD(NonMatchingOpt):
                 else:
                     thopt_cp_align_size_sub *= self.thopt_cpffd_shape[i]
             self.thopt_cp_align_size += thopt_cp_align_size_sub
-        self.thopt_dcpaligndcpffd = self.dCPaligndCPFFD(self.thopt_align_dir, 
+        self.thopt_dcpaligndcpffd = self.dCPaligndCPFFD_thopt(self.thopt_align_dir, 
                               self.thopt_cp_align_size, self.thopt_cpffd_size, 
                               self.thopt_cpffd_shape)
         return self.thopt_dcpaligndcpffd
 
-    def set_thopt_regu_CPFFD(self, thopt_regu_dir, thopt_regu_side, 
-                             thopt_regu_align=None):
+    def set_thopt_regu_CPFFD(self, regu_dir, regu_side, 
+                             regu_align=None):
         """
         ``shopt_regu_dir`` is a list that has the same length with 
         ``opt_field``. If the entry is None, that means regularize all 
@@ -887,12 +963,12 @@ class NonMatchingOptFFD(NonMatchingOpt):
 
         Parameters
         ----------
-        shopt_regu_dir : list of ints
-        shopt_regu_side : list of ints
+        regu_dir : list of ints
+        regu_side : list of ints
         """
-        self.thopt_regu_dir = thopt_regu_dir
-        self.thopt_regu_side = thopt_regu_side
-        self.thopt_regu_align = thopt_regu_align
+        self.thopt_regu_dir = regu_dir
+        self.thopt_regu_side = regu_side
+        self.thopt_regu_align = regu_align
 
         self.thopt_cpregu_sizes = []
         opt_field = [2]
@@ -913,18 +989,19 @@ class NonMatchingOptFFD(NonMatchingOpt):
 
             self.thopt_cpregu_sizes += [int(cpregu_size_temp),]
 
-        self.thopt_dcpregudcpffd_list = self.dCPregudCPFFD(
+        self.thopt_dcpregudcpffd_list = self.dCPregudCPFFD_thopt(
             self.thopt_cpregu_sizes, self.thopt_cpffd_size, 
             self.thopt_cpffd_shape, self.thopt_regu_dir, 
             self.thopt_regu_side, self.thopt_regu_align, opt_field=opt_field)
+
         return self.thopt_dcpregudcpffd_list
 
-    def set_thopt_align_CP_multiFFD(self, thopt_align_dir_list):
-        assert len(thopt_align_dir_list) == self.num_thopt_ffd
-        self.thopt_align_dir_list = thopt_align_dir_list
+    def set_thopt_align_CP_multiFFD(self, align_dir_list):
+        assert len(align_dir_list) == self.num_thopt_ffd
+        self.thopt_align_dir_list = align_dir_list
         self.thopt_dcpaligndcpffd_list = []
         for ffd_ind in range(self.num_thopt_ffd):
-            align_dir = thopt_align_dir_list[ffd_ind]
+            align_dir = self.thopt_align_dir_list[ffd_ind]
             if not isinstance(align_dir, list):
                 align_dir = [align_dir]
             cp_align_size = 0
@@ -936,7 +1013,7 @@ class NonMatchingOptFFD(NonMatchingOpt):
                     else:
                         cp_align_size_sub *= self.thopt_cpffd_shape_list[ffd_ind][i]
                 cp_align_size += cp_align_size_sub
-            self.thopt_dcpaligndcpffd_list += [self.dCPaligndCPFFD(align_dir, 
+            self.thopt_dcpaligndcpffd_list += [self.dCPaligndCPFFD_thopt(align_dir, 
                                   cp_align_size, self.thopt_cpffd_size_list[ffd_ind], 
                                   self.thopt_cpffd_shape_list[ffd_ind])]
         self.thopt_dcpaligndcpffd = block_diag(self.thopt_dcpaligndcpffd_list)
@@ -1004,6 +1081,41 @@ class NonMatchingOptFFD(NonMatchingOpt):
         else:
             raise ValueError(f"Undefined CPFFD ailgn direction {align_dir}")
         return free_dof, deriv_mat
+
+    def dCPaligndCPFFD_thopt(self, align_dir, cp_align_size, 
+                            cpffd_size, cpffd_shape):
+        deriv = np.zeros((cp_align_size, cpffd_size))
+        row_ind, l, m = 0, cpffd_shape[0], cpffd_shape[1]
+        for direction in align_dir:
+            if direction == 0:
+                for k in range(cpffd_shape[2]):
+                    for j in range(cpffd_shape[1]):
+                        for i in range(1, cpffd_shape[0]):
+                            col_ind0 = ijk2dof(0, j, k, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
+            elif direction == 1:
+                for k in range(cpffd_shape[2]):
+                    for i in range(cpffd_shape[0]):
+                        for j in range(1, cpffd_shape[1]):
+                            col_ind0 = ijk2dof(i, 0, k, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
+            elif direction == 2:
+                for j in range(cpffd_shape[1]):    
+                    for i in range(cpffd_shape[0]):
+                        for k in range(1,cpffd_shape[2]):
+                            col_ind0 = ijk2dof(i, j, 0, l, m)
+                            col_ind1 = ijk2dof(i, j, k, l, m)
+                            deriv[row_ind, col_ind0] = 1.
+                            deriv[row_ind, col_ind1] = -1.
+                            row_ind += 1
+        deriv_coo = coo_matrix(deriv)
+        return deriv_coo
 
     def CPpinDoFs(self, pin_dir0, pin_side0, pin_dir1, pin_side1, cpffd_shape):
         pin_dof = []
@@ -1130,6 +1242,185 @@ class NonMatchingOptFFD(NonMatchingOpt):
                         deriv_mat[row_ind, col_ind1] = 1.
                         row_ind += 1
         return coo_matrix(deriv_mat)
+
+    def dCPregudCPFFD_thopt(self, cpregu_sizes, cpffd_size, 
+                      cpffd_shape, regu_dir, regu_side, 
+                      align_dir=None, opt_field=None):
+        if opt_field is None:
+            opt_field = self.opt_field
+
+        derivs = [np.zeros((cpregu_sizes[i], cpffd_size)) 
+                  for i in range(len(opt_field))]
+        l, m = cpffd_shape[0], cpffd_shape[1]
+        for field_ind, field in enumerate(opt_field):
+            row_ind = 0
+            if field == 0:
+                if regu_dir[field_ind] is None:
+                    if align_dir is None:
+                        for i in range(cpffd_shape[0]-1):
+                            for j in range(cpffd_shape[1]):
+                                for k in range(cpffd_shape[2]):
+                                    col_ind0 = ijk2dof(i, j, k, l, m) 
+                                    col_ind1 = ijk2dof(i+1, j, k, l, m)
+                                    derivs[field_ind][row_ind, col_ind0] = -1.
+                                    derivs[field_ind][row_ind, col_ind1] = 1.
+                                    row_ind += 1
+                    elif align_dir[field_ind] == 0:
+                        raise ValueError("Optimization filed cannot equal to align direction")
+                    elif align_dir[field_ind] == 1:
+                        for i in range(cpffd_shape[0]-1):
+                            for k in range(cpffd_shape[2]):
+                                j = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i+1, j, k, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                    elif align_dir[field_ind] == 2:
+                        for i in range(cpffd_shape[0]-1):
+                            for j in range(cpffd_shape[1]):
+                                k = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i+1, j, k, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                elif regu_dir[field_ind] == 1:
+                    for i in range(cpffd_shape[0]-1):
+                        for k in range(cpffd_shape[2]):
+                            if regu_side[field_ind] == 0:
+                                j = 0
+                            elif regu_side[field_ind] == 1:
+                                j = cpffd_shape[1]-1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i+1, j, k, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+                elif regu_dir[field_ind] == 2:
+                    for i in range(cpffd_shape[0]-1):
+                        for j in range(cpffd_shape[1]):
+                            if regu_side[field_ind] == 0:
+                                k = 0
+                            elif regu_side[field_ind] == 1:
+                                k = cpffd_shape[2]-1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i+1, j, k, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+            elif field == 1:
+                if regu_dir[field_ind] is None:
+                    if align_dir is None:
+                        for j in range(cpffd_shape[1]-1):
+                            for i in range(cpffd_shape[0]):
+                                for k in range(cpffd_shape[2]):
+                                    col_ind0 = ijk2dof(i, j, k, l, m) 
+                                    col_ind1 = ijk2dof(i, j+1, k, l, m)
+                                    derivs[field_ind][row_ind, col_ind0] = -1.
+                                    derivs[field_ind][row_ind, col_ind1] = 1.
+                                    row_ind += 1
+                    elif align_dir[field_ind] == 0:
+                        for j in range(cpffd_shape[1]-1):
+                            for k in range(cpffd_shape[2]):
+                                i = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i+1, j, k, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                    elif align_dir[field_ind] == 1:
+                        raise ValueError("Optimization filed cannot equal to align direction")
+                    elif align_dir[field_ind] == 2:
+                        for j in range(cpffd_shape[1]-1):
+                            for i in range(cpffd_shape[0]):
+                                k = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i+1, j, k, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                elif regu_dir[field_ind] == 0:
+                    for j in range(cpffd_shape[1]-1):
+                        for k in range(cpffd_shape[2]):
+                            if regu_side[field_ind] == 0:
+                                i = 0
+                            elif regu_side[field_ind] == 1:
+                                i = cpffd_shape[0]-1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i, j+1, k, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+                elif regu_dir[field_ind] == 2:
+                    for j in range(cpffd_shape[1]-1):
+                        for i in range(cpffd_shape[0]):
+                            if regu_side[field_ind] == 0:
+                                k = 0
+                            elif regu_side[field_ind] == 1:
+                                k = cpffd_shape[2]-1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i, j+1, k, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+            elif field == 2:
+                if regu_dir[field_ind] is None:
+                    if align_dir is None:
+                        for k in range(cpffd_shape[2]-1):
+                            for i in range(cpffd_shape[0]):
+                                for j in range(cpffd_shape[1]):
+                                    col_ind0 = ijk2dof(i, j, k, l, m) 
+                                    col_ind1 = ijk2dof(i, j, k+1, l, m)
+                                    derivs[field_ind][row_ind, col_ind0] = -1.
+                                    derivs[field_ind][row_ind, col_ind1] = 1.
+                                    row_ind += 1
+                    elif align_dir[field_ind] == 0:
+                        for k in range(cpffd_shape[2]-1):
+                            for j in range(cpffd_shape[1]):
+                                i = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i, j, k+1, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                    elif align_dir[field_ind] == 1:
+                        for k in range(cpffd_shape[2]-1):
+                            for i in range(cpffd_shape[0]):
+                                j = 0
+                                col_ind0 = ijk2dof(i, j, k, l, m) 
+                                col_ind1 = ijk2dof(i, j, k+1, l, m)
+                                derivs[field_ind][row_ind, col_ind0] = -1.
+                                derivs[field_ind][row_ind, col_ind1] = 1.
+                                row_ind += 1
+                    elif align_dir[field_ind] == 2:
+                        raise ValueError("Optimization filed cannot equal to align direction")
+                elif regu_dir[field_ind] == 0:
+                    for k in range(cpffd_shape[2]-1):
+                        for j in range(cpffd_shape[1]):
+                            if regu_side[field_ind] == 0:
+                                i = 0
+                            elif regu_side[field_ind] == 1:
+                                i = cpffd_shape[0] - 1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i, j, k+1, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+                elif regu_dir[field_ind] == 1:
+                    for k in range(cpffd_shape[2]-1):
+                        for i in range(cpffd_shape[0]):
+                            if regu_side[field_ind] == 0:
+                                j = 0
+                            elif regu_side[field_ind] == 1:
+                                j = cpffd_shape[1] - 1
+                            col_ind0 = ijk2dof(i, j, k, l, m) 
+                            col_ind1 = ijk2dof(i, j, k+1, l, m)
+                            derivs[field_ind][row_ind, col_ind0] = -1.
+                            derivs[field_ind][row_ind, col_ind1] = 1.
+                            row_ind += 1
+        derivs_coo = [coo_matrix(A) for A in derivs]
+        return derivs_coo
 
     # def save_FFD_block(self, ind):
     #     # Save FFD block for visualization

@@ -42,8 +42,8 @@ class CPFE2IGAComp(om.ImplicitComponent):
             #                    self.nonmatching_opt.cp_funcs_nest[field], 
             #                    comm=self.nonmatching_opt.comm)
             self.add_input(self.input_cp_fe_name_list[i],
-                           shape=self.input_shapes[i],
-                           val=self.init_cp_fe_array_list[i])
+                           shape=self.input_shapes[i],)
+                           # val=self.init_cp_fe_array_list[i])
             self.add_output(self.output_cp_iga_name_list[i],
                             shape=self.output_shapes[i])
             self.declare_partials(self.output_cp_iga_name_list[i],
