@@ -21,7 +21,7 @@ class VarThOptGroup(om.Group):
         self.options.declare('h_th_ffd_align_name', default='thickness_FFD_align')
         self.options.declare('volume_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.options['nonmatching_opt_ffd']
         self.h_th_ffd_name = self.options['h_th_ffd_name']
         self.h_th_fe_name = self.options['h_th_fe_name']
@@ -58,7 +58,7 @@ class VarThOptGroup(om.Group):
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_h_th_ffd_name=self.h_th_ffd_name,
                         output_h_th_fe_name=self.h_th_fe_name)
-        self.h_th_ffd2fe_comp.init_paramters()
+        self.h_th_ffd2fe_comp.init_parameters()
         self.add_subsystem(self.h_th_ffd2fe_comp_name, self.h_th_ffd2fe_comp)
 
         # Add h_th FE2IGA comp
@@ -66,7 +66,7 @@ class VarThOptGroup(om.Group):
                         nonmatching_opt=self.nonmatching_opt_ffd,
                         input_h_th_fe_name=self.h_th_fe_name,
                         output_h_th_iga_name=self.h_th_iga_name)
-        self.h_th_fe2iga_comp.init_paramters()
+        self.h_th_fe2iga_comp.init_parameters()
         self.add_subsystem(self.h_th_fe2iga_comp_name, self.h_th_fe2iga_comp)
 
         # Add disp_states_comp
@@ -74,7 +74,7 @@ class VarThOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_h_th_name=self.h_th_iga_name,
                            output_u_name=self.disp_name)
-        self.disp_states_comp.init_paramters(save_files=True)
+        self.disp_states_comp.init_parameters(save_files=save_files)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
         # Add internal energy comp (objective function)
@@ -83,7 +83,7 @@ class VarThOptGroup(om.Group):
                           input_h_th_name=self.h_th_iga_name,
                           input_u_name=self.disp_name,
                           output_wint_name=self.int_energy_name)
-        self.int_energy_comp.init_paramters()
+        self.int_energy_comp.init_parameters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
         # Add volume comp (objective function)
@@ -91,7 +91,7 @@ class VarThOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_h_th_name=self.h_th_iga_name,
                            output_vol_name=self.volume_name)
-        self.volume_comp.init_paramters()
+        self.volume_comp.init_parameters()
         self.add_subsystem(self.volume_comp_name, self.volume_comp)
         self.vol_val = 0
         for s_ind in range(self.nonmatching_opt_ffd.num_splines):
@@ -172,6 +172,7 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
+save_files = False
 optimizer = 'SNOPT'
 save_path = './'
 folder_name = "results/"
@@ -264,10 +265,7 @@ for i in range(num_surfs):
     h_th[i].interpolate(Constant(5.0e-3))
 
 # Create non-matching problem
-nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, opt_shape=False, 
-                                 opt_thickness=True, var_thickness=True, 
-                                 comm=worldcomm)
-
+nonmatching_opt = NonMatchingOptFFD(splines, E, h_th, nu, comm=worldcomm)
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
 
 if mpirank == 0:
@@ -276,6 +274,7 @@ if mpirank == 0:
 nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
                                     preprocessor.intersections_para_coords, 
                                     penalty_coefficient)
+nonmatching_opt.set_thickness_opt(var_thickness=True)
 
 
 # Define magnitude of load
@@ -346,14 +345,15 @@ print("Setting multiple FFD blocks ...")
 nonmatching_opt.set_thopt_multiFFD(ffd_knots_list, ffd_control_list)
 ###############################################################
 
-print("Creating files ...")
 # Set up optimization
-nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
-                             thickness=nonmatching_opt.opt_thickness)
+if save_files:
+    print("Creating files ...")
+    nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
+                                 thickness=nonmatching_opt.opt_thickness)
 print("Setting variable thickness optimization group ...")
 model = VarThOptGroup(nonmatching_opt_ffd=nonmatching_opt)
 print("Initializing gropu parameters ...")
-model.init_paramters()
+model.init_parameters()
 prob = om.Problem(model=model)
 
 if optimizer.upper() == 'SNOPT':
@@ -363,54 +363,52 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major optimality tolerance'] = 1e-4
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = './SNOPT_report/SNOPT_summary.out'
-    prob.driver.opt_settings['Print file'] = './SNOPT_report/SNOPT_print.out'
-    prob.driver.options['debug_print'] = ['objs']#, 'desvars']
+    prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
+    prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
+    # prob.driver.options['debug_print'] = ['objs']#, 'desvars']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
     prob.driver.options['tol'] = 1e-5
     prob.driver.options['disp'] = True
-    prob.driver.options['debug_print'] = ['objs']#, 'desvars']
+    # prob.driver.options['debug_print'] = ['objs']#, 'desvars']
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
 
-save_disp = False
 
-if mpirank == 0:
-    print("Saving results...")
-
-if save_disp:
+# Create a recorder variable
+if save_files:
+    if mpirank == 0:
+        print("Saving results...")
     for i in range(nonmatching_opt.num_splines):
         save_results(splines[i], nonmatching_opt.spline_funcs[i], i, 
                      save_path=save_path, folder=folder_name, 
                      save_cpfuncs=True, comm=worldcomm)
+    opt_data_dir = save_path+folder_name+'opt_data/'
+    if not os.path.isdir(opt_data_dir):
+        os.makedirs(opt_data_dir)
 
-# Create a recorder variable
-opt_data_dir = save_path+folder_name+'opt_data/'
-if not os.path.isdir(opt_data_dir):
-    os.mkdir(opt_data_dir)
+    recorder_name = opt_data_dir+'recorder.sql'
+    shopt_data_name = opt_data_dir+'shopt_ffd_data.npz'
 
-recorder_name = opt_data_dir+'recorder.sql'
-shopt_data_name = opt_data_dir+'shopt_ffd_data.npz'
+    prob.driver.recording_options['includes'] = ['*']
+    prob.driver.recording_options['record_objectives'] = True
+    prob.driver.recording_options['record_derivatives'] = False
+    prob.driver.recording_options['record_constraints'] = True
+    prob.driver.recording_options['record_desvars'] = True
+    prob.driver.recording_options['record_inputs'] = True
+    prob.driver.recording_options['record_outputs'] = True
+    prob.driver.recording_options['record_residuals'] = True
 
-prob.driver.recording_options['includes'] = ['*']
-prob.driver.recording_options['record_objectives'] = True
-prob.driver.recording_options['record_derivatives'] = False
-prob.driver.recording_options['record_constraints'] = True
-prob.driver.recording_options['record_desvars'] = True
-prob.driver.recording_options['record_inputs'] = True
-prob.driver.recording_options['record_outputs'] = True
-prob.driver.recording_options['record_residuals'] = True
-
-recorder = om.SqliteRecorder(recorder_name)
-prob.driver.add_recorder(recorder)
+    recorder = om.SqliteRecorder(recorder_name)
+    prob.driver.add_recorder(recorder)
 
 prob.setup()
 prob.run_driver()
 
-major_iter_inds = model.disp_states_comp.func_eval_major_ind
-np.savez(shopt_data_name, major_iter_ind=major_iter_inds, 
-         ffd_control=None, ffd_knots=None, QoI=0.)
+if save_files:
+    major_iter_inds = model.disp_states_comp.func_eval_major_ind
+    np.savez(shopt_data_name, major_iter_ind=major_iter_inds, 
+             ffd_control=None, ffd_knots=None, QoI=0.)

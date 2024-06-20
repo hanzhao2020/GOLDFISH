@@ -19,7 +19,7 @@ class ThicknessOptGroup(om.Group):
         self.options.declare('int_energy_name', default='w_int')
         self.options.declare('volume_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.h_th_name_design = self.options['h_th_name_design']
         self.h_th_name_full = self.options['h_th_name_full']
@@ -52,7 +52,7 @@ class ThicknessOptGroup(om.Group):
                         nonmatching_opt=self.nonmatching_opt,
                         input_h_th_name_design=self.h_th_name_design,
                         output_h_th_name_full=self.h_th_name_full)
-        self.h_th_map_comp.init_paramters()
+        self.h_th_map_comp.init_parameters()
         self.add_subsystem(self.h_th_map_comp_name, self.h_th_map_comp)
 
         # Add disp_states_comp
@@ -60,7 +60,7 @@ class ThicknessOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt,
                            input_h_th_name=self.h_th_name_full,
                            output_u_name=self.disp_name)
-        self.disp_states_comp.init_paramters(save_files=True)
+        self.disp_states_comp.init_parameters(save_files=save_files)
         self.add_subsystem(self.disp_states_comp_name, self.disp_states_comp)
 
         # Add internal energy comp (objective function)
@@ -69,7 +69,7 @@ class ThicknessOptGroup(om.Group):
                           input_h_th_name=self.h_th_name_full,
                           input_u_name=self.disp_name,
                           output_wint_name=self.int_energy_name)
-        self.int_energy_comp.init_paramters()
+        self.int_energy_comp.init_parameters()
         self.add_subsystem(self.int_energy_comp_name, self.int_energy_comp)
 
         # Add volume comp (objective function)
@@ -77,7 +77,7 @@ class ThicknessOptGroup(om.Group):
                            nonmatching_opt=self.nonmatching_opt,
                            input_h_th_name=self.h_th_name_full,
                            output_vol_name=self.volume_name)
-        self.volume_comp.init_paramters()
+        self.volume_comp.init_parameters()
         self.add_subsystem(self.volume_comp_name, self.volume_comp)
         self.vol_val = 0
         for s_ind in range(self.nonmatching_opt.num_splines):
@@ -152,6 +152,7 @@ def OCCBSpline2tIGArSpline(surface, num_field=3, quad_deg_const=4,
     spline = ExtractedSpline(spline_generator, quad_deg)
     return spline
 
+save_files = False
 optimizer = 'SLSQP'
 # optimizer = 'SNOPT'
 
@@ -218,8 +219,7 @@ for i in range(num_surfs):
     h_th[i].interpolate(Constant(h_val_list[i]))
 
 # Create non-matching problem
-nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, opt_thickness=True, 
-                                 opt_shape=False, comm=worldcomm)
+nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, comm=worldcomm)
 nonmatching_opt.create_mortar_meshes(preprocessor.mortar_nels)
 
 if mpirank == 0:
@@ -228,6 +228,8 @@ if mpirank == 0:
 nonmatching_opt.mortar_meshes_setup(preprocessor.mapping_list, 
                             preprocessor.intersections_para_coords, 
                             penalty_coefficient)
+
+nonmatching_opt.set_thickness_opt(var_thickness=False)
 
 # Define magnitude of load
 load = Constant(-100) # The load should be in the unit of N/m^3
@@ -252,16 +254,16 @@ for i in range(num_surfs):
                                E, nu, h_th[i], source_terms[i])]
 nonmatching_opt.set_residuals(residuals)
 
-
 if mpirank == 0:
     print("Solving linear non-matching problem ...")
 nonmatching_opt.solve_linear_nonmatching_problem()
 
 # Set up optimization
-nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
-                             thickness=nonmatching_opt.opt_thickness)
+if save_files:
+    nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name, 
+                                 thickness=nonmatching_opt.opt_thickness)
 model = ThicknessOptGroup(nonmatching_opt=nonmatching_opt)
-model.init_paramters()
+model.init_parameters()
 prob = om.Problem(model=model)
 
 if optimizer.upper() == 'SNOPT':
@@ -271,16 +273,16 @@ if optimizer.upper() == 'SNOPT':
     prob.driver.opt_settings['Major feasibility tolerance'] = 1e-6
     prob.driver.opt_settings['Major optimality tolerance'] = 1e-6
     prob.driver.opt_settings['Major iterations limit'] = 50000
-    prob.driver.opt_settings['Summary file'] = './SNOPT_report/SNOPT_summary.out'
-    prob.driver.opt_settings['Print file'] = './SNOPT_report/SNOPT_print.out'
-    prob.driver.options['debug_print'] = ['objs', 'desvars']
+    prob.driver.opt_settings['Summary file'] = './SNOPT_summary.out'
+    prob.driver.opt_settings['Print file'] = './SNOPT_print.out'
+    # prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['print_results'] = True
 elif optimizer.upper() == 'SLSQP':
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
     prob.driver.options['tol'] = 1e-8
     prob.driver.options['disp'] = True
-    prob.driver.options['debug_print'] = ['objs', 'desvars']
+    # prob.driver.options['debug_print'] = ['objs', 'desvars']
     prob.driver.options['maxiter'] = 50000
 else:
     raise ValueError("Undefined optimizer: {}".format(optimizer))
@@ -293,12 +295,7 @@ if mpirank == 0:
         print("Thickness for patch {:2d}: {:10.6f}".format(i, 
               nonmatching_opt.h_th[i].vector().get_local()[0]))
 
-save_disp = True
-
-if mpirank == 0:
-    print("Saving results...")
-
-if save_disp:
+if save_files:
     for i in range(nonmatching_opt.num_splines):
         save_results(splines[i], nonmatching_opt.spline_funcs[i], i, 
                      save_path=save_path, folder=folder_name, 

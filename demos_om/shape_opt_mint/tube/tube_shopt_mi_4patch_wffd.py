@@ -2,7 +2,6 @@
 Initial geometry can be downloaded from the following link:
 https://drive.google.com/file/d/1fRaho_xzmChlgLdrMM9CQ7WTqr9_DItt/view?usp=share_link
 """
-
 import time
 from datetime import datetime
 import numpy as np
@@ -455,3 +454,30 @@ prob.run_driver()
 
 if save_files:
     nonmatching_opt.save_files()
+
+
+# Plot optimized cross sectional view 
+num_eval_pts = 101
+xi0_pts = np.linspace(0,1,num_eval_pts)
+xi1_pts = 0.1
+s0_x_pts = np.zeros(num_eval_pts)
+s0_y_pts = np.zeros(num_eval_pts)
+s1_x_pts = np.zeros(num_eval_pts)
+s1_y_pts = np.zeros(num_eval_pts)
+for i in range(num_eval_pts):
+    s0_x_pts[i] = nonmatching_opt.splines[1].cpFuncs[0]([xi0_pts[i], xi1_pts])
+    s0_y_pts[i] = nonmatching_opt.splines[1].cpFuncs[1]([xi0_pts[i], xi1_pts])
+    s1_x_pts[i] = nonmatching_opt.splines[3].cpFuncs[0]([xi0_pts[i], xi1_pts])
+    s1_y_pts[i] = nonmatching_opt.splines[3].cpFuncs[1]([xi0_pts[i], xi1_pts])
+
+y_ana_pts = np.zeros(num_eval_pts)
+for i in range(num_eval_pts):
+    y_ana_pts[i] = np.sqrt(1-xi0_pts[i]**2)
+
+plt.figure()
+plt.plot(s0_x_pts, s0_y_pts, linewidth=3)
+plt.plot(s1_x_pts, s1_y_pts, linewidth=3)
+plt.plot(xi0_pts, y_ana_pts, '--', color='gray', linewidth=2)
+ax = plt.gca()
+ax.set_aspect('equal', adjustable='box')
+plt.show()
