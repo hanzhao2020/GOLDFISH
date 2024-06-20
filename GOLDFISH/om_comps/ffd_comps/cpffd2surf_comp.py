@@ -46,8 +46,8 @@ class CPFFD2SurfComp(om.ExplicitComponent):
     def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cpffd_name_list[i],
-                           shape=self.input_shapes[i],
-                           val=self.init_cpffd[i])
+                           shape=self.input_shapes[i],)
+                           # val=self.init_cpffd[i])
             self.add_output(self.output_cpsurf_name_list[i],
                             shape=self.output_shapes[i])
             self.declare_partials(self.output_cpsurf_name_list[i],

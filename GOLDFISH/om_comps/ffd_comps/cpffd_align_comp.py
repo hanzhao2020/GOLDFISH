@@ -18,16 +18,16 @@ class CPFFDAlignComp(om.ExplicitComponent):
         self.opt_field = self.nonmatching_opt_ffd.opt_field
         self.init_cpffd = []
         if self.nonmatching_opt_ffd.shopt_multiffd:
-            self.deriv = self.nonmatching_opt_ffd.shopt_dcpaligndcpmultiffd
+            self.derivs = self.nonmatching_opt_ffd.shopt_dcpaligndcpmultiffd
             for i, field in enumerate(self.opt_field):
                 self.init_cpffd += [self.nonmatching_opt_ffd.get_init_CPFFD_multiFFD(field),]
         else:
-            self.deriv = self.nonmatching_opt_ffd.shopt_dcpaligndcpffd
+            self.derivs = self.nonmatching_opt_ffd.shopt_dcpaligndcpffd
             for i, field in enumerate(self.opt_field):
                 self.init_cpffd += [self.nonmatching_opt_ffd.shopt_cpffd_flat[:,field]]
 
-        self.input_shape = self.deriv.shape[1]
-        self.output_shape = self.deriv.shape[0]
+        self.input_shapes = [] # self.derivs.shape[1]
+        self.output_shapes = [] # self.derivs.shape[0]
 
         self.input_cpffd_name_list = []
         self.output_cpalign_name_list = []
@@ -36,24 +36,26 @@ class CPFFDAlignComp(om.ExplicitComponent):
                 [self.input_cpffd_name_pre+str(field)]
             self.output_cpalign_name_list += \
                 [self.output_cpalign_name_pre+str(field)]
+            self.input_shapes += [self.derivs[i].shape[1],]
+            self.output_shapes += [self.derivs[i].shape[0],]
 
     def setup(self):
         for i, field in enumerate(self.opt_field):
             self.add_input(self.input_cpffd_name_list[i],
-                           shape=self.input_shape,
+                           shape=self.input_shapes[i],
                            val=self.init_cpffd[i])
             self.add_output(self.output_cpalign_name_list[i],
-                            shape=self.output_shape)
+                            shape=self.output_shapes[i])
             self.declare_partials(self.output_cpalign_name_list[i],
                                   self.input_cpffd_name_list[i],
-                                  val=self.deriv.data,
-                                  rows=self.deriv.row,
-                                  cols=self.deriv.col)
+                                  val=self.derivs[i].data,
+                                  rows=self.derivs[i].row,
+                                  cols=self.derivs[i].col)
 
     def compute(self, inputs, outputs):
         for i, field in enumerate(self.opt_field):
             outputs[self.output_cpalign_name_list[i]] = \
-                self.deriv*inputs[self.input_cpffd_name_list[i]]
+                self.derivs[i]*inputs[self.input_cpffd_name_list[i]]
 
 
 if __name__ == "__main__":
