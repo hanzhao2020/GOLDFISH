@@ -76,8 +76,8 @@ h_th = [Function(spline.V_control) for spline in splines]
 for i in range(len(splines)):
     h_th[i].interpolate(Constant(0.1))
 
-nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu, opt_shape=True, 
-                                 opt_thickness=True, var_thickness=True)
+nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu)
+nonmatching_opt.set_shopt_surf_inds([0,1,2], [[0,1],[0,1], [0,1]])
 
 mortar_nels = [2*num_el1]
 nonmatching_opt.create_mortar_meshes(mortar_nels)
@@ -116,4 +116,4 @@ ps_ind = [0,]
 nonmatching_opt.set_point_sources(point_sources=ps_list, 
                                   point_source_inds=ps_ind)
 
-m = nonmatching_opt.dRIGAdh_th()
+# m = nonmatching_opt.dRIGAdh_th()

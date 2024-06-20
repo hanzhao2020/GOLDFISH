@@ -11,7 +11,7 @@ class CPFFDPinModel(Model):
         self.parameters.declare('input_cpffd_name_pre', default='CP_FFD')
         self.parameters.declare('output_cppin_name_pre', default='CP_FFD_pin')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cppin_name_pre = self.parameters['output_cppin_name_pre']
@@ -19,7 +19,7 @@ class CPFFDPinModel(Model):
                   nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                   input_cpffd_name_pre=self.input_cpffd_name_pre,
                   output_cppin_name_pre=self.output_cppin_name_pre)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         cpffd_list = [None for i in range(len(self.op.opt_field))]
@@ -44,7 +44,7 @@ class CPFFDPinOperation(CustomExplicitOperation):
         self.parameters.declare('input_cpffd_name_pre', default='CP_FFD')
         self.parameters.declare('output_cppin_name_pre', default='CP_FFD_pin')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cppin_name_pre = self.parameters['output_cppin_name_pre']
@@ -99,7 +99,7 @@ if __name__ == "__main__":
                                         pin_dir1=2, pin_side1=[0])
 
     m = CPFFDPinModel(nonmatching_opt_ffd=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

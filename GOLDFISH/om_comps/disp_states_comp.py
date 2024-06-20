@@ -11,7 +11,7 @@ class DispStatesComp(om.ImplicitComponent):
         self.options.declare('input_h_th_name', default='thickness')
         self.options.declare('output_u_name', default='displacements')
 
-    def init_paramters(self, save_files=False, nonlinear_solver_rtol=1e-3,
+    def init_parameters(self, save_files=False, nonlinear_solver_rtol=1e-3,
                        nonlinear_solver_max_it=30):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
@@ -57,7 +57,7 @@ class DispStatesComp(om.ImplicitComponent):
             for i, field in enumerate(self.opt_field):
                 self.add_input(self.input_cp_iga_name_list[i],
                                shape=self.input_cp_shape,
-                               val=self.init_cp_iga[:,field])
+                               val=self.init_cp_iga[i])
                 self.declare_partials(self.output_u_name,
                                       self.input_cp_iga_name_list[i])
         if self.opt_thickness:
@@ -95,9 +95,9 @@ class DispStatesComp(om.ImplicitComponent):
     def linearize(self, inputs, outputs, partials):
         self.update_inputs_outpus(inputs, outputs)
         self.disp_state_imop.linearize()
+        self.func_eval_major_ind += [self.func_eval_ind-1]
 
         if self.save_files:
-            self.func_eval_major_ind += [self.func_eval_ind-1]
             print("**** Saving pvd files, ind: {:6d} ****"
                   .format(self.major_iter_ind))
             self.nonmatching_opt.save_files(
@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = DispStatesComp(nonmatching_opt=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

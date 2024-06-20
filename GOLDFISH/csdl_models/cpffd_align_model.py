@@ -14,7 +14,7 @@ class CPFFDAlignModel(Model):
         self.parameters.declare('output_cpalign_name_pre', 
                                 default='CP_FFD_align')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cpalign_name_pre = \
@@ -23,7 +23,7 @@ class CPFFDAlignModel(Model):
                   nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                   input_cpffd_name_pre=self.input_cpffd_name_pre,
                   output_cpalign_name_pre=self.output_cpalign_name_pre)
-        self.op.init_paramters()
+        self.op.init_parameters()
         
     def define(self):
         cpffd_list = [None for i in range(len(self.op.opt_field))]
@@ -48,7 +48,7 @@ class CPFFDAlignOperation(CustomExplicitOperation):
         self.parameters.declare('input_cpffd_name_pre', default='CP_FFD')
         self.parameters.declare('output_cpalign_name_pre', default='CP_FE')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.input_cpffd_name_pre = self.parameters['input_cpffd_name_pre']
         self.output_cpalign_name_pre = self.parameters['output_cpalign_name_pre']
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     nonmatching_opt.set_shopt_align_CPFFD(shopt_align_dir=1)
 
     m = CPFFDAlignModel(nonmatching_opt_ffd=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

@@ -12,7 +12,7 @@ class HthFE2IGAModel(Model):
         self.parameters.declare('input_h_th_fe_name', default='thickness_FE')
         self.parameters.declare('output_h_th_iga_name', default='thickness_IGA')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_h_th_fe_name = self.parameters['input_h_th_fe_name']
         self.output_h_th_iga_name = self.parameters['output_h_th_iga_name']
@@ -21,7 +21,7 @@ class HthFE2IGAModel(Model):
                   nonmatching_opt=self.nonmatching_opt,
                   input_h_th_fe_name=self.input_h_th_fe_name, 
                   output_h_th_iga_name=self.output_h_th_iga_name)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         h_th_fe = self.declare_variable(self.op.input_h_th_fe_name,
@@ -38,7 +38,7 @@ class HthFE2IGAOperation(CustomImplicitOperation):
         self.parameters.declare('input_h_th_fe_name', default='thickness_FE')
         self.parameters.declare('output_h_th_iga_name', default='thickness_IGA')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_h_th_fe_name = self.parameters['input_h_th_fe_name']
         self.output_h_th_iga_name = self.parameters['output_h_th_iga_name']
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     m = HthFE2IGAModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

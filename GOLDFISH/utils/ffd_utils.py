@@ -74,10 +74,15 @@ def create_3D_block(num_els, p, CP_lims):
     ----------
     num_els : list of ints, number of elements for FFD block 
               in 3 directions
-    p : int, degree of FFD block
+    p : int or list, degree of FFD block
     CP_lims : ndarray or list, limits of FFD block control points
               in 3 directions
     """
+    if not isinstance(p, list):
+        p_list = [p]*len(num_els)
+    else:
+        p_list = p
+
     cp_ranges = []
     for i in range(3):
         cp_ranges += [CP_lims[i][1]-CP_lims[i][0]]
@@ -103,9 +108,9 @@ def create_3D_block(num_els, p, CP_lims):
     S = ruled(L0, L1)
     V = extrude(S, cp_ranges[2], 2)
     V_deg = V.degree
-    V.elevate(0, p - V_deg[0])
-    V.elevate(1, p - V_deg[1])
-    V.elevate(2, p - V_deg[2])
+    V.elevate(0, p_list[0] - V_deg[0])
+    V.elevate(1, p_list[1] - V_deg[1])
+    V.elevate(2, p_list[2] - V_deg[2])
     V.refine(0, ref_knots0)
     V.refine(1, ref_knots1)
     V.refine(2, ref_knots2)

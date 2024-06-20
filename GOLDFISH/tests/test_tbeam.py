@@ -77,9 +77,7 @@ for i in range(len(splines)):
     h_th_list += [Function(splines[i].V_control)]
     h_th_list[i].interpolate(Constant(0.1))
 
-nonmatching_opt = NonMatchingOptFFD(splines, E, h_th_list, nu, 
-                                    opt_shape=True, opt_field=[0,1,2],
-                                    opt_thickness=True, var_thickness=True)
+nonmatching_opt = NonMatchingOptFFD(splines, E, h_th_list, nu)
 
 mortar_nels = [2*num_el1]
 nonmatching_opt.create_mortar_meshes(mortar_nels)

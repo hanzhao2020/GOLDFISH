@@ -14,7 +14,7 @@ class ComplianceModel(Model):
         self.parameters.declare('input_u_name', default='displacements')
         self.parameters.declare('output_c_name', default='w_int')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.forces = self.parameters['forces']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
@@ -26,7 +26,7 @@ class ComplianceModel(Model):
                   input_cp_iga_name_pre=self.input_cp_iga_name_pre, 
                   input_u_name=self.input_u_name,
                   output_c_name=self.output_c_name)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         cp_iga_list = [None for i in range(len(self.op.opt_field))]
@@ -50,7 +50,7 @@ class ComplianceOperation(CustomExplicitOperation):
         self.parameters.declare('input_u_name', default='displacement')
         self.parameters.declare('output_c_name', default='w_int')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.forces = self.parameters['forces']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     forces = [force for i in range(nonmatching_opt.num_splines)]
     m = ComplianceModel(nonmatching_opt=nonmatching_opt,
                         forces=forces)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

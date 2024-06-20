@@ -30,7 +30,7 @@ class VarThOptGroup(Model):
         self.parameters.declare('h_th_ffd_regu_name', default='thickness_FFD_regu')
         self.parameters.declare('volume_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.h_th_ffd_name = self.parameters['h_th_ffd_name']
         self.h_th_fe_name = self.parameters['h_th_fe_name']
@@ -65,7 +65,7 @@ class VarThOptGroup(Model):
                         nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                         input_h_th_ffd_name=self.h_th_ffd_name,
                         output_h_th_fe_name=self.h_th_fe_name)
-        self.h_th_ffd2fe_model.init_paramters()
+        self.h_th_ffd2fe_model.init_parameters()
         self.add(self.h_th_ffd2fe_model, 
                  name=self.h_th_ffd2fe_model_name, promotes=[])
 
@@ -74,7 +74,7 @@ class VarThOptGroup(Model):
                         nonmatching_opt=self.nonmatching_opt_ffd,
                         input_h_th_fe_name=self.h_th_fe_name,
                         output_h_th_iga_name=self.h_th_iga_name)
-        self.h_th_fe2iga_model.init_paramters()
+        self.h_th_fe2iga_model.init_parameters()
         self.add(self.h_th_fe2iga_model, 
                  name=self.h_th_fe2iga_model_name, promotes=[])
 
@@ -83,7 +83,7 @@ class VarThOptGroup(Model):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_h_th_name=self.h_th_iga_name,
                            output_u_name=self.disp_name)
-        self.disp_states_model.init_paramters(save_files=False)
+        self.disp_states_model.init_parameters(save_files=False)
         self.add(self.disp_states_model, 
                  name=self.disp_states_model_name, promotes=[])
 
@@ -93,7 +93,7 @@ class VarThOptGroup(Model):
                           input_h_th_name=self.h_th_iga_name,
                           input_u_name=self.disp_name,
                           output_wint_name=self.int_energy_name)
-        self.int_energy_model.init_paramters()
+        self.int_energy_model.init_parameters()
         self.add(self.int_energy_model, 
                  name=self.int_energy_model_name, promotes=[])
 
@@ -102,7 +102,7 @@ class VarThOptGroup(Model):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_h_th_name=self.h_th_iga_name,
                            output_vol_name=self.volume_name)
-        self.volume_model.init_paramters()
+        self.volume_model.init_parameters()
         self.add(self.volume_model, name=self.volume_model_name, promotes=[])
         self.vol_val = 0
         for s_ind in range(self.nonmatching_opt_ffd.num_splines):
@@ -114,7 +114,7 @@ class VarThOptGroup(Model):
             nonmatching_opt_ffd=self.nonmatching_opt_ffd,
             input_h_th_name=self.h_th_ffd_name,
             output_h_th_align_name=self.h_th_ffd_align_name)
-        self.h_th_ffd_align_model.init_paramters()
+        self.h_th_ffd_align_model.init_parameters()
         self.add(self.h_th_ffd_align_model, 
                  name=self.h_th_ffd_align_model_name, promotes=[])
         self.cpffd_align_cons_val = \
@@ -125,7 +125,7 @@ class VarThOptGroup(Model):
             nonmatching_opt_ffd=self.nonmatching_opt_ffd,
             input_h_th_name=self.h_th_ffd_name,
             output_h_th_regu_name=self.h_th_ffd_regu_name)
-        self.h_th_ffd_regu_model.init_paramters()
+        self.h_th_ffd_regu_model.init_parameters()
         self.add(self.h_th_ffd_regu_model, name=self.h_th_ffd_regu_model_name, promotes=[])
         self.h_th_ffd_regu_cons_val = \
              np.ones(self.h_th_ffd_regu_model.op.output_shape)*1e-5
@@ -322,7 +322,7 @@ nonmatching_opt.create_files(save_path=save_path, folder_name=folder_name,
                              thickness=nonmatching_opt.opt_thickness)
 
 model = VarThOptGroup(nonmatching_opt_ffd=nonmatching_opt)
-model.init_paramters()
+model.init_parameters()
 sim = py_simulator(model, analytics=False)
 sim.run()
 

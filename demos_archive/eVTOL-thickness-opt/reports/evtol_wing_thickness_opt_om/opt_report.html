@@ -1,0 +1,115 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<title>OpenMDAO Optimization Report for Problem evtol_wing_thickness_opt_om</title>
+
+<!-- CSS style to set alternate table
+row using color -->
+<style>
+    body {
+        font: normal 10px Verdana, Arial, sans-serif;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 90%;
+    }
+
+    th {
+      background-color: SlateGray;
+      color: white;
+      }
+
+    th, td {
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: LightGray;
+    }
+
+    tr:nth-child(odd) {
+        background-color: GhostWhite;
+    }
+
+    span.equality-constraint {
+        font-size: 25px;
+     }
+    span.equality-constraint-satisfied {
+        font-size: 25px;
+        color: green;
+     }
+    span.equality-constraint-violated {
+        font-size: 25px;
+        color: red;
+     }
+</style>
+</head>
+
+<body>
+<h1>OpenMDAO Optimization Report for Problem evtol_wing_thickness_opt_om (All values are in unscaled, physical units)</h1>
+<table>
+<tbody>
+<tr><td>Problem:                    </td><td>evtol_wing_thickness_opt_om                      </td></tr>
+<tr><td>Script:                     </td><td>evtol_wing_thickness_opt_om.py                   </td></tr>
+<tr><td>Optimizer:                  </td><td>pyOptSparse_SNOPT                                </td></tr>
+<tr><td>Number of driver iterations:</td><td>30                                               </td></tr>
+<tr><td>Number of objective calls:  </td><td>29                                               </td></tr>
+<tr><td>Number of derivative calls: </td><td>28                                               </td></tr>
+<tr><td>Execution start time:       </td><td>2023-03-14 14:23:16                              </td></tr>
+<tr><td>Wall clock run time:        </td><td>00 hours 25 minutes 03 seconds 650.2 milliseconds</td></tr>
+<tr><td>Exit status:                </td><td>SUCCESS                                          </td></tr>
+</tbody>
+</table>
+<h2>Objectives</h2>
+<table>
+<thead>
+<tr><th>name                      </th><th>val       </th><th>ref  </th><th>ref0  </th><th>adder  </th><th>scaler    </th><th>units  </th></tr>
+</thead>
+<tbody>
+<tr><td>internal_energy_comp.int_E</td><td>1.2261e+00</td><td>     </td><td>      </td><td>       </td><td>1.0000e+02</td><td>       </td></tr>
+</tbody>
+</table>
+<h2>Design Variables</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">        name         </th><th style="text-align: center;"> alias </th><th>size  </th><th style="text-align: center;">                         min                         </th><th style="text-align: center;">  max   </th><th style="text-align: center;">  mean   </th><th>lower     </th><th>upper     </th><th style="text-align: center;"> equals </th><th>ref  </th><th>ref0  </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             visual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">inputs_comp.thickness</td><td style="text-align: center;">       </td><td>12    </td><td style="text-align: center;"><span style="color:rgb(213, 94, 0)">(|0.0005|)</span></td><td style="text-align: center;">|0.0055|</td><td style="text-align: center;">|0.00153|</td><td>5.0000e-04</td><td>1.0000e-01</td><td style="text-align: center;">        </td><td>1    </td><td>0     </td><td style="text-align: center;">       </td><td style="text-align: center;"><img width=300 src='data:image/png;base64,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'></td></tr>
+</tbody>
+</table>
+<h2>Constraints</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">       name       </th><th style="text-align: center;"> alias </th><th>size  </th><th>min       </th><th>max       </th><th>mean      </th><th style="text-align: center;"> lower </th><th style="text-align: center;"> upper </th><th>equals    </th><th>ref  </th><th>ref0  </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                    visual                                     </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">volume_comp.volume</td><td style="text-align: center;">       </td><td>1     </td><td>3.3300e-02</td><td>3.3300e-02</td><td>3.3300e-02</td><td style="text-align: center;">       </td><td style="text-align: center;">       </td><td>3.3300e-02</td><td>1    </td><td>0     </td><td style="text-align: center;">       </td><td style="text-align: center;"><span class="equality-constraint equality-constraint-satisfied">&#10003;</span></td></tr>
+</tbody>
+</table>
+<h2>Optimizer settings</h2>
+
+<table>
+<thead>
+<tr><th>Setting              </th><th>Val                            </th><th>Description                                                                                                                                           </th></tr>
+</thead>
+<tbody>
+<tr><td>debug_print          </td><td>[&#x27;objs&#x27;]                       </td><td>List of what type of Driver variables to print at each iteration.                                                                                     </td></tr>
+<tr><td>optimizer            </td><td>SNOPT                          </td><td>Name of optimizers to use                                                                                                                             </td></tr>
+<tr><td>title                </td><td>Optimization using pyOpt_sparse</td><td>Title of this optimization run                                                                                                                        </td></tr>
+<tr><td>print_opt_prob       </td><td>False                          </td><td>Print the opt problem summary before running the optimization                                                                                         </td></tr>
+<tr><td>print_results        </td><td>True                           </td><td>Print pyOpt results if True                                                                                                                           </td></tr>
+<tr><td>gradient_method      </td><td>openmdao                       </td><td>Finite difference implementation to use                                                                                                               </td></tr>
+<tr><td>user_terminate_signal</td><td>                               </td><td>OS signal that triggers a clean user-termination. Only SNOPT supports this option.                                                                    </td></tr>
+<tr><td>singular_jac_behavior</td><td>warn                           </td><td>Defines behavior of a zero row/col check after first call tocompute_totals:error - raise an error.warn - raise a warning.ignore - don&#x27;t perform check.</td></tr>
+<tr><td>singular_jac_tol     </td><td>1e-16                          </td><td>Tolerance for zero row/column check.                                                                                                                  </td></tr>
+</tbody>
+</table>
+</body>
+
+</html>

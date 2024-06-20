@@ -1,0 +1,5 @@
+Thickness for patch  0:   0.017412
+Thickness for patch  1:   0.013612
+Thickness for patch  2:   0.010129
+Thickness for patch  3:   0.006712
+Thickness for patch  4:   0.003324

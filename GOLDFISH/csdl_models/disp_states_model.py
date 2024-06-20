@@ -3,7 +3,16 @@ from GOLDFISH.operations.disp_imop import *
 
 import csdl
 from csdl import Model, CustomImplicitOperation
-from csdl_om import Simulator
+
+import psutil
+def memory_usage_psutil():
+    # return the memory usage in MB
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info()[0]/float(1024**2)
+    return mem
+
+# print("Inspection disp extraction 1: Memory usage: {:8.2f} MB.\n"\
+#               .format(memory_usage_psutil()))
 
 class DispStatesModel(Model):
 
@@ -11,20 +20,23 @@ class DispStatesModel(Model):
         self.parameters.declare('nonmatching_opt')
         self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
         self.parameters.declare('input_h_th_name', default='thickness')
+        self.parameters.declare('input_Paero_name', default='aero_pressure')
         self.parameters.declare('output_u_name', default='displacements')
 
-    def init_paramters(self, save_files=False, nonlinear_solver_rtol=1e-3,
+    def init_parameters(self, save_files=False, nonlinear_solver_rtol=1e-3,
                        nonlinear_solver_max_it=30):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
+        self.input_Paero_name = self.parameters['input_Paero_name']
         self.output_u_name = self.parameters['output_u_name']
         self.op = DispStatesOperation(
                   nonmatching_opt=self.nonmatching_opt,
                   input_cp_iga_name_pre=self.input_cp_iga_name_pre,
                   input_h_th_name=self.input_h_th_name,
+                  input_Paero_name=self.input_Paero_name,
                   output_u_name=self.output_u_name)
-        self.op.init_paramters(save_files=save_files,
+        self.op.init_parameters(save_files=save_files,
                                nonlinear_solver_rtol=nonlinear_solver_rtol,
                                nonlinear_solver_max_it=nonlinear_solver_max_it)
 
@@ -43,6 +55,11 @@ class DispStatesModel(Model):
                    shape=(self.op.input_h_th_shape),
                    val=self.op.init_h_th)
             input_list += [h_th]
+        if self.nonmatching_opt.use_aero_pressure:
+            Paero = self.declare_variable(self.op.input_Paero_name,
+                    shape=(self.op.inpout_Paero_shape),
+                    val=np.zeros(self.op.inpout_Paero_shape))
+            input_list += [Paero]
         
         disp = csdl.custom(*input_list, op=self.op)
         self.register_output(self.op.output_u_name, disp)
@@ -54,13 +71,15 @@ class DispStatesOperation(CustomImplicitOperation):
         self.parameters.declare('nonmatching_opt')
         self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
         self.parameters.declare('input_h_th_name', default='thickness')
+        self.parameters.declare('input_Paero_name', default='aero_pressure')
         self.parameters.declare('output_u_name', default='displacements')
 
-    def init_paramters(self, save_files=False, nonlinear_solver_rtol=1e-3,
-                       nonlinear_solver_max_it=30):
+    def init_parameters(self, save_files, nonlinear_solver_rtol,
+                       nonlinear_solver_max_it):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
+        self.input_Paero_name = self.parameters['input_Paero_name']
         self.output_u_name = self.parameters['output_u_name']
         self.save_files = save_files
         self.nonlinear_solver_rtol = nonlinear_solver_rtol
@@ -73,6 +92,7 @@ class DispStatesOperation(CustomImplicitOperation):
         self.disp_state_imop = DispImOpeartion(self.nonmatching_opt)
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
+        self.use_aero_pressure = self.nonmatching_opt.use_aero_pressure
         self.opt_thickness = self.nonmatching_opt.opt_thickness
         self.var_thickness = self.nonmatching_opt.var_thickness
 
@@ -92,6 +112,9 @@ class DispStatesOperation(CustomImplicitOperation):
             else:
                 self.input_h_th_shape = self.nonmatching_opt.h_th_dof
                 self.init_h_th = self.nonmatching_opt.init_h_th
+        if self.use_aero_pressure:
+            self.inpout_Paero_shape = \
+                self.nonmatching_opt.linear_spline_vec_iga_dof
 
     def define(self):
         self.add_output(self.output_u_name, shape=self.output_shape)
@@ -109,6 +132,9 @@ class DispStatesOperation(CustomImplicitOperation):
             self.add_input(self.input_h_th_name, shape=self.input_h_th_shape,)
                            # val=self.init_h_th
             self.declare_derivatives(self.output_u_name, self.input_h_th_name)
+        if self.use_aero_pressure:
+            self.add_input(self.input_Paero_name, shape=self.inpout_Paero_shape)
+            self.declare_derivatives(self.output_u_name, self.input_Paero_name)
 
     def update_inputs_outpus(self, inputs, outputs):
         if self.opt_shape:
@@ -121,6 +147,8 @@ class DispStatesOperation(CustomImplicitOperation):
                                      inputs[self.input_h_th_name])
             else:
                 self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
+        if self.use_aero_pressure:
+            self.nonmatching_opt.update_Paero(inputs[self.input_Paero_name])
         self.nonmatching_opt.update_uIGA(outputs[self.output_u_name])
 
     def evaluate_residuals(self, inputs, outputs, residuals):
@@ -128,10 +156,18 @@ class DispStatesOperation(CustomImplicitOperation):
         residuals[self.output_u_name] = self.disp_state_imop.apply_nonlinear()
 
     def solve_residual_equations(self, inputs, outputs):
+
+        print("Inspection disp nonlinear solve 0: Memory usage: {:8.2f} MB.\n"\
+              .format(memory_usage_psutil()))
+
         self.update_inputs_outpus(inputs, outputs)
         outputs[self.output_u_name] = self.disp_state_imop.solve_nonlinear(
                                       self.nonlinear_solver_max_it,
                                       self.nonlinear_solver_rtol)
+
+        print("Inspection disp nonlinear solve 1: Memory usage: {:8.2f} MB.\n"\
+              .format(memory_usage_psutil()))
+
         self.func_eval_ind += 1
         # if self.save_files:
         #     self.nonmatching_opt.save_files(thickness=self.opt_thickness)
@@ -160,6 +196,9 @@ class DispStatesOperation(CustomImplicitOperation):
         if self.opt_thickness:
             if self.input_h_th_name in d_inputs:
                 d_inputs_array_list += [d_inputs[self.input_h_th_name]]
+        if self.use_aero_pressure:
+            if self.input_Paero_name in d_inputs:
+                d_inputs_array_list += [d_inputs[self.input_Paero_name]]
         if len(d_inputs_array_list) == 0:
             d_inputs_array_list = None
 
@@ -188,6 +227,8 @@ class DispStatesOperation(CustomImplicitOperation):
                                                   d_residuals_array)
 
 if __name__ == "__main__":
+    # from csdl_om import Simulator
+    from python_csdl_backend import Simulator
     from GOLDFISH.tests.test_dRdt import nonmatching_opt
     # from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
@@ -204,8 +245,8 @@ if __name__ == "__main__":
     # nonmatching_opt.set_FFD(FFD_block.knots, FFD_block.control)
 
     m = DispStatesModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
-    sim = Simulator(m)
+    m.init_parameters()
+    sim = Simulator(m, analytics=False)
     sim.run()
     print("Check partials:")
     sim.check_partials(compact_print=True)

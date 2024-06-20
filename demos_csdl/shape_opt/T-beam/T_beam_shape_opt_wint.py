@@ -31,7 +31,7 @@ class ShapeOptModel(Model):
         self.parameters.declare('cpffd_regu_name_pre', default='CP_FFD_regu')
         self.parameters.declare('volume_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt_ffd = self.parameters['nonmatching_opt_ffd']
         self.cpffd_name_pre = self.parameters['cpffd_name_pre']
         self.cpsurf_fe_name_pre = self.parameters['cpsurf_fe_name_pre']
@@ -82,7 +82,7 @@ class ShapeOptModel(Model):
                               nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                               input_cpffd_name_pre=self.cpffd_name_pre,
                               output_cpsurf_name_pre=self.cpsurf_fe_name_pre)
-        self.cpffd2surf_model.init_paramters()
+        self.cpffd2surf_model.init_parameters()
         self.add(self.cpffd2surf_model, 
                  name=self.cpffd2surf_model_name, promotes=[])
 
@@ -91,7 +91,7 @@ class ShapeOptModel(Model):
                               nonmatching_opt=self.nonmatching_opt_ffd,
                               input_cp_fe_name_pre=self.cpsurf_fe_name_pre,
                               output_cp_iga_name_pre=self.cpsurf_iga_name_pre)
-        self.cpfe2iga_model.init_paramters()
+        self.cpfe2iga_model.init_parameters()
         self.add(self.cpfe2iga_model, 
                  name=self.cpfe2iga_model_name, promotes=[])
 
@@ -100,7 +100,7 @@ class ShapeOptModel(Model):
                             nonmatching_opt=self.nonmatching_opt_ffd,
                             input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                             output_u_name=self.disp_name)
-        self.disp_states_model.init_paramters(save_files=True)
+        self.disp_states_model.init_parameters(save_files=True)
         self.add(self.disp_states_model, 
                  name=self.disp_states_model_name, promotes=[])
 
@@ -110,7 +110,7 @@ class ShapeOptModel(Model):
                             input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                             input_u_name=self.disp_name,
                             output_wint_name=self.int_energy_name)
-        self.int_energy_model.init_paramters()
+        self.int_energy_model.init_parameters()
         self.add(self.int_energy_model, 
                  name=self.int_energy_model_name, promotes=[])
 
@@ -119,7 +119,7 @@ class ShapeOptModel(Model):
                             nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                             input_cpffd_name_pre=self.cpffd_name_pre,
                             output_cpalign_name_pre=self.cpffd_align_name_pre)
-        self.cpffd_align_model.init_paramters()
+        self.cpffd_align_model.init_parameters()
         self.cpffd_align_cons_val = np.zeros(
                                     self.cpffd_align_model.op.output_shape)
         self.add(self.cpffd_align_model, 
@@ -130,7 +130,7 @@ class ShapeOptModel(Model):
                          nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                          input_cpffd_name_pre=self.cpffd_name_pre,
                          output_cppin_name_pre=self.cpffd_pin_name_pre)
-        self.cpffd_pin_model.init_paramters()
+        self.cpffd_pin_model.init_parameters()
         self.add(self.cpffd_pin_model, 
                  name=self.cpffd_pin_model_name, promotes=[])
         self.cpffd_pin_cons_val = []
@@ -143,7 +143,7 @@ class ShapeOptModel(Model):
                            nonmatching_opt_ffd=self.nonmatching_opt_ffd,
                            input_cpffd_name_pre=self.cpffd_name_pre,
                            output_cpregu_name_pre=self.cpffd_regu_name_pre)
-        self.cpffd_regu_model.init_paramters()
+        self.cpffd_regu_model.init_parameters()
         self.add(self.cpffd_regu_model, self.cpffd_regu_model_name)
         self.cpffd_regu_lower = [np.ones(self.cpffd_regu_model.op.\
                                  output_shapes[i])*1.e-1
@@ -154,7 +154,7 @@ class ShapeOptModel(Model):
                            nonmatching_opt=self.nonmatching_opt_ffd,
                            input_cp_iga_name_pre=self.cpsurf_iga_name_pre,
                            output_vol_name=self.volume_name)
-        self.volume_model.init_paramters()
+        self.volume_model.init_parameters()
         self.add(self.volume_model, self.volume_model_name)
         self.vol_val = 0
         for s_ind in range(self.nonmatching_opt_ffd.num_splines):
@@ -351,7 +351,7 @@ nonmatching_opt_ffd.create_files(save_path=save_path,
                                  # refine_mesh=True, ref_nel=64)
 
 model = ShapeOptModel(nonmatching_opt_ffd=nonmatching_opt_ffd)
-model.init_paramters()
+model.init_parameters()
 sim = py_simulator(model, analytics=False)
 sim.run()
 prob = CSDLProblem(problem_name='T-beam-shape-opt', simulator=sim)

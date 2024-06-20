@@ -84,6 +84,7 @@ class KLShell(m3l.ExplicitOperation):
 
         displacements = m3l.Variable(name=f'{shell_name}_displacement',
                         shape=mesh_shape, operation=self)
+
         stresses = m3l.Variable(name=f'{shell_name}_stress',
                                 shape=mesh_shape[0], operation=self)
         # mass = m3l.Variable(name='mass', shape=(1,), operation=self)
@@ -91,6 +92,14 @@ class KLShell(m3l.ExplicitOperation):
         # inertia_tensor = m3l.Variable(name='inertia_tensor',
         #                               shape=(3,3), operation=self)
         return displacements, stresses, volume
+
+        # # stresses = m3l.Variable(name=f'{shell_name}_stress',
+        # #                         shape=mesh_shape[0], operation=self)
+        # # mass = m3l.Variable(name='mass', shape=(1,), operation=self)
+        # volume = m3l.Variable(name='volume', shape=(1,), operation=self)
+        # # inertia_tensor = m3l.Variable(name='inertia_tensor',
+        # #                               shape=(3,3), operation=self)
+        # return displacements, volume
 
 
 class KLShellForces(m3l.ExplicitOperation):

@@ -19,7 +19,7 @@ class MaxvMStressComp(om.ExplicitComponent):
         self.options.declare('input_h_th_name', default='thickness')
         self.options.declare('output_max_vM_name', default='max_vM_stress')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.rho = self.options['rho']
         self.alpha = self.options['alpha']
@@ -247,9 +247,11 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = MaxvMStressComp(nonmatching_opt=nonmatching_opt,
-                          rho=1e2, alpha=0.01, m=1e3, method='pnorm', 
+                          rho=1e2, alpha=0.01, m=1e4, 
+                          method='induced power', 
+                        #   method='pnorm', 
                           linearize_stress=True)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

@@ -14,7 +14,7 @@ class IntEnergyReguComp(om.ExplicitComponent):
         self.options.declare('output_wint_name', default='w_int')
         self.options.declare('regu_para', default=1e-1)
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.input_h_th_name = self.options['input_h_th_name']
@@ -58,8 +58,8 @@ class IntEnergyReguComp(om.ExplicitComponent):
         if self.opt_shape:
             for i, field in enumerate(self.opt_field):
                 self.add_input(self.input_cp_iga_name_list[i],
-                               shape=self.input_cpiga_shape,
-                               val=self.init_cp_iga[:,field])
+                               shape=self.input_cpiga_shape,)
+                               # val=self.init_cp_iga[i])
                 self.declare_partials(self.output_wint_name,
                                       self.input_cp_iga_name_list[i])
         if self.opt_thickness:
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = IntEnergyComp(nonmatching_opt=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

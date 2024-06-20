@@ -13,7 +13,7 @@ class IntEnergyComp(om.ExplicitComponent):
         self.options.declare('input_u_name', default='displacements')
         self.options.declare('output_wint_name', default='w_int')
 
-    def init_paramters(self, wint_regu=None):
+    def init_parameters(self, wint_regu=None):
         self.nonmatching_opt = self.options['nonmatching_opt']
         self.input_cp_iga_name_pre = self.options['input_cp_iga_name_pre']
         self.input_h_th_name = self.options['input_h_th_name']
@@ -22,24 +22,30 @@ class IntEnergyComp(om.ExplicitComponent):
 
         self.wint_exop = IntEnergyExOperation(self.nonmatching_opt, wint_regu)
 
-        self.opt_field = self.nonmatching_opt.opt_field
+        
         self.opt_shape = self.nonmatching_opt.opt_shape
         self.opt_thickness = self.nonmatching_opt.opt_thickness
-        self.var_thickness = self.nonmatching_opt.var_thickness
-
+        
         self.input_u_shape = self.nonmatching_opt.vec_iga_dof
-        self.init_disp_array = get_petsc_vec_array(
-                               self.nonmatching_opt.u_iga_nest)
+
+        _, a0 = self.nonmatching_opt.solve_linear_nonmatching_problem(iga_dofs=True)
+        self.init_disp_array = a0.array
+        # self.init_disp_array = get_petsc_vec_array(
+        #                        self.nonmatching_opt.u_iga_nest)
         # self.init_disp_array = np.ones(self.nonmatching_opt.vec_iga_dof)
         
         if self.opt_shape:
-            self.input_cpiga_shape = self.nonmatching_opt.vec_scalar_iga_dof
+            self.opt_field = self.nonmatching_opt.opt_field
+            self.input_cp_shapes = []
+            for field_ind, field in enumerate(self.opt_field):        
+                self.input_cp_shapes += [len(self.nonmatching_opt.cpdes_iga_dofs_full[field_ind])]
             self.init_cp_iga = self.nonmatching_opt.get_init_CPIGA()
             self.input_cp_iga_name_list = []
             for i, field in enumerate(self.opt_field):
                 self.input_cp_iga_name_list += \
                     [self.input_cp_iga_name_pre+str(field)]
         if self.opt_thickness:
+            self.var_thickness = self.nonmatching_opt.var_thickness
             if self.var_thickness:
                 self.input_h_th_shape = self.nonmatching_opt.vec_scalar_iga_dof
                 self.init_h_th = np.ones(self.nonmatching_opt.vec_scalar_iga_dof)*0.1
@@ -56,8 +62,8 @@ class IntEnergyComp(om.ExplicitComponent):
         if self.opt_shape:
             for i, field in enumerate(self.opt_field):
                 self.add_input(self.input_cp_iga_name_list[i],
-                               shape=self.input_cpiga_shape,
-                               val=self.init_cp_iga[:,field])
+                               shape=self.input_cp_shapes[i],
+                               val=self.init_cp_iga[i])
                 self.declare_partials(self.output_wint_name,
                                       self.input_cp_iga_name_list[i])
         if self.opt_thickness:
@@ -104,7 +110,7 @@ if __name__ == "__main__":
 
     prob = Problem()
     comp = IntEnergyComp(nonmatching_opt=nonmatching_opt)
-    comp.init_paramters()
+    comp.init_parameters()
     prob.model = comp
     prob.setup()
     prob.run_model()

@@ -13,7 +13,7 @@ class VolumeModel(Model):
         self.parameters.declare('input_h_th_name', default='thickness')
         self.parameters.declare('output_vol_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
@@ -23,7 +23,7 @@ class VolumeModel(Model):
                   input_cp_iga_name_pre=self.input_cp_iga_name_pre, 
                   input_h_th_name=self.input_h_th_name,
                   output_vol_name=self.output_vol_name)
-        self.op.init_paramters()
+        self.op.init_parameters()
 
     def define(self):
         input_list = []
@@ -52,7 +52,7 @@ class VolumeOperation(CustomExplicitOperation):
         self.parameters.declare('input_h_th_name', default='thickness')
         self.parameters.declare('output_vol_name', default='volume')
 
-    def init_paramters(self):
+    def init_parameters(self):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     m = VolumeModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)

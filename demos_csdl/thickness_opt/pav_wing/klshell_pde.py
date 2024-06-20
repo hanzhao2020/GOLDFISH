@@ -6,7 +6,7 @@
 # # RM shell related properties
 # from shell_analysis_fenicsx.read_properties import readCLT, sortIndex
 
-import psutil
+
 
 # GOLDFISH related models
 from GOLDFISH.nonmatching_opt_om import *
@@ -25,11 +25,15 @@ import numpy as np
 
 SAVE_PATH = '/home/han/Documents/test_results/'
 
+import psutil
 def memory_usage_psutil():
     # return the memory usage in MB
     process = psutil.Process(os.getpid())
     mem = process.memory_info()[0]/float(1024**2)
     return mem
+
+# print("Inspection disp extraction 1: Memory usage: {:8.2f} MB.\n"\
+#               .format(memory_usage_psutil()))
 
 
 # print("Inspection: Memory usage: {:8.2f} MB.\n"\
@@ -175,7 +179,7 @@ class KLShellModule(ModuleCSDL):
         # Max vM stress model
         vm_surf = 'top'
         rho = 1e2
-        upper_vM = 324E6/1.5
+        upper_vM = 324E6/1.5/22
         self.max_vM_model = MaxvMStressModel(
                             nonmatching_opt=self.nonmatching_opt,
                             rho=rho, alpha=None, 

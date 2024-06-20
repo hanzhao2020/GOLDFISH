@@ -112,6 +112,10 @@ for s_ind in range(len(knots_u)):
     ikNURBS_surfs += [NURBS((knots_u[s_ind], knots_v[s_ind]), 
                            control_points[s_ind]),]
 
+occ_surfs = [ikNURBS2BSpline_surface(ik_surf) for ik_surf in ikNURBS_surfs]
+write_geom_file(occ_surfs, 'pav_wing_geom_m.igs')
+print(aaa)
+
 occ_surfs_init = []
 for s_ind in range(len(ikNURBS_surfs)):
     occ_surfs_init += [ikNURBS2BSpline_surface(ikNURBS_surfs[s_ind])]
@@ -132,14 +136,19 @@ for i in range(len(u_insert_list)):
     v_num_insert += [ref_level_list[i]*v_insert_list[i]]
 
 # Geometry preprocessing and surface-surface intersections computation
-preprocessor = OCCPreprocessing(occ_surfs_init, reparametrize=True, 
-                                refine=True)
-preprocessor.reparametrize_BSpline_surfaces(num_pts_eval, num_pts_eval,
-                                            geom_scale=geom_scale,
-                                            remove_dense_knots=True,
-                                            rtol=1e-4)
-preprocessor.refine_BSpline_surfaces(p, p, u_num_insert, v_num_insert, 
-                                     correct_element_shape=True)
+preprocessor = OCCPreprocessing(occ_surfs_init, reparametrize=False, 
+                                refine=False)
+# preprocessor.reparametrize_BSpline_surfaces(num_pts_eval, num_pts_eval,
+#                                             geom_scale=geom_scale,
+#                                             remove_dense_knots=True,
+#                                             rtol=1e-4)
+# preprocessor.refine_BSpline_surfaces(p, p, u_num_insert, v_num_insert, 
+#                                      correct_element_shape=True)
+
+ik_surfs = [BSpline_surface2ikNURBS(occ_bs_surf, p=3, 
+            u_num_insert=0, v_num_insert=0, 
+            refine=False, geom_scale=1.0e3) 
+            for occ_bs_surf in preprocessor.BSpline_surfs]
 
 # Front spars: [0, 2, 4, 6, 8]
 # Rear spars: [1, 3, 5, 7, 9]
@@ -245,7 +254,7 @@ for i in range(len(nodes_parametric)):
 
 wing_thickness = pav_geom_mesh.functions['wing_thickness']
 
-test_ind = 10
+test_ind = 15
 save_path = SAVE_PATH
 folder_name = 'results'+str(test_ind)+'/'
 
@@ -419,6 +428,13 @@ cruise_model.register_output(cruise_structural_wing_mesh_stresses)
 cruise_model.register_output(cruise_structural_wing_mesh_displacements)
 cruise_model.register_output(wing_mass)
 
+# # # TEMP: remove stress
+# cruise_structural_wing_mesh_displacements, wing_mass = \
+#     shell_displacements_model.evaluate(
+#         forces=cruise_structural_wing_mesh_forces)
+# cruise_model.register_output(cruise_structural_wing_mesh_displacements)
+# cruise_model.register_output(wing_mass)
+
 grid_num = 10
 transfer_para_mesh = []
 structural_left_wing_names = pav_geom_mesh.geom_data['primitive_names']\
@@ -465,14 +481,14 @@ system_model_name = 'system_model.'+design_scenario_name+'.'\
 
 caddee_csdl_model.add_constraint(system_model_name+
     'Wing_klshell_displacement_map.wing_shell_tip_displacement',
-    upper=0.1,scaler=1E1)
+    upper=0.05,scaler=1E1)
 
 caddee_csdl_model.add_constraint(system_model_name+
     'Wing_klshell_model.klshell.max_vM_model.max_vM_stress',
     upper=324E6/1.5/20,scaler=1E-8)
 
 caddee_csdl_model.add_objective(system_model_name+
-    'Wing_klshell_model.klshell.volume_model.volume', scaler=1e-1)
+    'Wing_klshell_model.klshell.volume_model.volume', scaler=1e1)
 
 h_min = h
 
@@ -550,7 +566,7 @@ if __name__ == '__main__':
 
     prob = CSDLProblem(problem_name='pav', simulator=sim)
 
-    optimizer = SLSQP(prob, maxiter=50, ftol=1E-5)
+    optimizer = SLSQP(prob, maxiter=50, ftol=1E-7)
 
     # # from modopt.snopt_library import SNOPT
     # optimizer = SNOPT(prob,
@@ -558,5 +574,5 @@ if __name__ == '__main__':
     #                   Major_optimality = 1e-5,
     #                   append2file=False)
 
-    # optimizer.solve()
-    # optimizer.print_results()
+    optimizer.solve()
+    optimizer.print_results()

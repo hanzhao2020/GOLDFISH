@@ -1,0 +1,115 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<title>OpenMDAO Optimization Report for Problem pegasus_wing_thickness_opt_om</title>
+
+<!-- CSS style to set alternate table
+row using color -->
+<style>
+    body {
+        font: normal 10px Verdana, Arial, sans-serif;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 90%;
+    }
+
+    th {
+      background-color: SlateGray;
+      color: white;
+      }
+
+    th, td {
+        text-align: left;
+        padding: 8px;
+    }
+
+    tr:nth-child(even) {
+        background-color: LightGray;
+    }
+
+    tr:nth-child(odd) {
+        background-color: GhostWhite;
+    }
+
+    span.equality-constraint {
+        font-size: 25px;
+     }
+    span.equality-constraint-satisfied {
+        font-size: 25px;
+        color: green;
+     }
+    span.equality-constraint-violated {
+        font-size: 25px;
+        color: red;
+     }
+</style>
+</head>
+
+<body>
+<h1>OpenMDAO Optimization Report for Problem pegasus_wing_thickness_opt_om (All values are in unscaled, physical units)</h1>
+<table>
+<tbody>
+<tr><td>Problem:                    </td><td>pegasus_wing_thickness_opt_om                   </td></tr>
+<tr><td>Script:                     </td><td>pegasus_wing_thickness_opt_om.py                </td></tr>
+<tr><td>Optimizer:                  </td><td>pyOptSparse_SNOPT                               </td></tr>
+<tr><td>Number of driver iterations:</td><td>40                                              </td></tr>
+<tr><td>Number of objective calls:  </td><td>39                                              </td></tr>
+<tr><td>Number of derivative calls: </td><td>38                                              </td></tr>
+<tr><td>Execution start time:       </td><td>2023-04-09 21:41:49                             </td></tr>
+<tr><td>Wall clock run time:        </td><td>02 hours 47 minutes 20 seconds 53.9 milliseconds</td></tr>
+<tr><td>Exit status:                </td><td>SUCCESS                                         </td></tr>
+</tbody>
+</table>
+<h2>Objectives</h2>
+<table>
+<thead>
+<tr><th>name                      </th><th>val       </th><th>ref  </th><th>ref0  </th><th>adder  </th><th>scaler    </th><th>units  </th></tr>
+</thead>
+<tbody>
+<tr><td>internal_energy_comp.int_E</td><td>2.7050e+00</td><td>     </td><td>      </td><td>       </td><td>1.0000e+03</td><td>       </td></tr>
+</tbody>
+</table>
+<h2>Design Variables</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">        name         </th><th style="text-align: center;"> alias </th><th>size  </th><th style="text-align: center;">                        min                         </th><th style="text-align: center;">  max   </th><th style="text-align: center;">  mean  </th><th>lower     </th><th>upper  </th><th style="text-align: center;"> equals </th><th style="text-align: center;"> ref </th><th style="text-align: center;"> ref0 </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   visual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">inputs_comp.thickness</td><td style="text-align: center;">       </td><td>90    </td><td style="text-align: center;"><span style="color:rgb(213, 94, 0)">(|0.005|)</span></td><td style="text-align: center;">|0.0753|</td><td style="text-align: center;">|0.0169|</td><td>5.0000e-03</td><td>1      </td><td style="text-align: center;">        </td><td style="text-align: center;">None </td><td style="text-align: center;"> None </td><td style="text-align: center;">       </td><td style="text-align: center;"><img width=300 src='data:image/png;base64,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'></td></tr>
+</tbody>
+</table>
+<h2>Constraints</h2>
+<table>
+<thead>
+<tr><th style="text-align: center;">       name       </th><th style="text-align: center;"> alias </th><th>size  </th><th>min       </th><th>max       </th><th>mean      </th><th style="text-align: center;"> lower </th><th style="text-align: center;"> upper </th><th>equals    </th><th>ref  </th><th>ref0  </th><th style="text-align: center;"> units </th><th style="text-align: center;">                                    visual                                     </th></tr>
+</thead>
+<tbody>
+<tr><td style="text-align: center;">volume_comp.volume</td><td style="text-align: center;">       </td><td>1     </td><td>1.0200e-01</td><td>1.0200e-01</td><td>1.0200e-01</td><td style="text-align: center;">       </td><td style="text-align: center;">       </td><td>1.0200e-01</td><td>1    </td><td>0     </td><td style="text-align: center;">       </td><td style="text-align: center;"><span class="equality-constraint equality-constraint-satisfied">&#10003;</span></td></tr>
+</tbody>
+</table>
+<h2>Optimizer settings</h2>
+
+<table>
+<thead>
+<tr><th>Setting              </th><th>Val                            </th><th>Description                                                                                                                                           </th></tr>
+</thead>
+<tbody>
+<tr><td>debug_print          </td><td>[&#x27;objs&#x27;]                       </td><td>List of what type of Driver variables to print at each iteration.                                                                                     </td></tr>
+<tr><td>optimizer            </td><td>SNOPT                          </td><td>Name of optimizers to use                                                                                                                             </td></tr>
+<tr><td>title                </td><td>Optimization using pyOpt_sparse</td><td>Title of this optimization run                                                                                                                        </td></tr>
+<tr><td>print_opt_prob       </td><td>False                          </td><td>Print the opt problem summary before running the optimization                                                                                         </td></tr>
+<tr><td>print_results        </td><td>True                           </td><td>Print pyOpt results if True                                                                                                                           </td></tr>
+<tr><td>gradient_method      </td><td>openmdao                       </td><td>Finite difference implementation to use                                                                                                               </td></tr>
+<tr><td>user_terminate_signal</td><td>                               </td><td>OS signal that triggers a clean user-termination. Only SNOPT supports this option.                                                                    </td></tr>
+<tr><td>singular_jac_behavior</td><td>warn                           </td><td>Defines behavior of a zero row/col check after first call tocompute_totals:error - raise an error.warn - raise a warning.ignore - don&#x27;t perform check.</td></tr>
+<tr><td>singular_jac_tol     </td><td>1e-16                          </td><td>Tolerance for zero row/column check.                                                                                                                  </td></tr>
+</tbody>
+</table>
+</body>
+
+</html>

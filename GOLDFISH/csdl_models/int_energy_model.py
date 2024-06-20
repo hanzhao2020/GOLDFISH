@@ -14,7 +14,7 @@ class IntEnergyModel(Model):
         self.parameters.declare('input_u_name', default='displacements')
         self.parameters.declare('output_wint_name', default='w_int')
 
-    def init_paramters(self, wint_regu=None):
+    def init_parameters(self, wint_regu=None):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
@@ -26,7 +26,7 @@ class IntEnergyModel(Model):
                         input_h_th_name=self.input_h_th_name,
                         input_u_name=self.input_u_name,
                         output_wint_name=self.output_wint_name)
-        self.op.init_paramters(wint_regu=wint_regu)
+        self.op.init_parameters(wint_regu=wint_regu)
 
     def define(self):
         input_list = []
@@ -59,7 +59,7 @@ class IntEnergyOperation(CustomExplicitOperation):
         self.parameters.declare('input_u_name', default='displacement')
         self.parameters.declare('output_wint_name', default='w_int')
 
-    def init_paramters(self, wint_regu=None):
+    def init_parameters(self, wint_regu=None):
         self.nonmatching_opt = self.parameters['nonmatching_opt']
         self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
         self.input_h_th_name = self.parameters['input_h_th_name']
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
     m = IntEnergyModel(nonmatching_opt=nonmatching_opt)
-    m.init_paramters()
+    m.init_parameters()
     sim = Simulator(m)
     sim.run()
     sim.check_partials(compact_print=True)
