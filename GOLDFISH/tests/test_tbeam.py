@@ -79,6 +79,8 @@ for i in range(len(splines)):
 
 nonmatching_opt = NonMatchingOptFFD(splines, E, h_th_list, nu)
 
+nonmatching_opt.set_thickness_opt(var_thickness=False)
+
 mortar_nels = [2*num_el1]
 nonmatching_opt.create_mortar_meshes(mortar_nels)
 

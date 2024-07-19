@@ -79,6 +79,8 @@ for i in range(len(splines)):
 nonmatching_opt = NonMatchingOpt(splines, E, h_th, nu)
 nonmatching_opt.set_shopt_surf_inds([0,1,2], [[0,1],[0,1], [0,1]])
 
+nonmatching_opt.set_thickness_opt(var_thickness=False)
+
 mortar_nels = [2*num_el1]
 nonmatching_opt.create_mortar_meshes(mortar_nels)
 
@@ -116,4 +118,5 @@ ps_ind = [0,]
 nonmatching_opt.set_point_sources(point_sources=ps_list, 
                                   point_source_inds=ps_ind)
 
+nonmatching_opt.solve_linear_nonmatching_problem()
 # m = nonmatching_opt.dRIGAdh_th()

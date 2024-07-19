@@ -1,56 +1,26 @@
 from GOLDFISH.nonmatching_opt_ffd import *
 from GOLDFISH.operations.volume_exop import *
 
-import csdl
-from csdl import Model, CustomExplicitOperation
-from csdl_om import Simulator
+import csdl_alpha as csdl
 
 from scipy.linalg import block_diag
 from scipy.sparse import coo_matrix
 
-class HthMapModel(Model):
+class HthMapModel(csdl.CustomExplicitOperation):
 
-    def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('order', default=0)
-        self.parameters.declare('input_h_th_name_design', default='thickness')
-        self.parameters.declare('output_h_th_name_full', default='thickness_full')
+    def __init__(self, nonmatching_opt, order=0,
+                 input_h_th_name_design='h_th_design', 
+                 output_h_th_name_full='h_th'):
+        super().__init__()
+        csdl.check_parameter(nonmatching_opt, 'nonmatching_opt')
+        csdl.check_parameter(order, 'order')
+        csdl.check_parameter(input_h_th_name_design, 'input_h_th_name_design')
+        csdl.check_parameter(output_h_th_name_full, 'output_h_th_name_full')
 
-    def init_parameters(self):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.order = self.parameters['order']
-        self.input_h_th_name_design = self.parameters['input_h_th_name_design']
-        self.output_h_th_name_full = self.parameters['output_h_th_name_full']
-        self.num_splines = self.nonmatching_opt.num_splines
-
-        self.op = HthMapOperation(
-                  nonmatching_opt=self.nonmatching_opt,
-                  order=self.order, 
-                  input_h_th_name_design=self.input_h_th_name_design,
-                  output_h_th_name_full=self.output_h_th_name_full)
-        self.op.init_parameters()
-
-    def define(self):
-        h_th = self.declare_variable(self.op.input_h_th_name_design,
-               shape=(self.op.input_shape),
-               val=self.op.init_val)
-        vol = csdl.custom(h_th, op=self.op)
-        self.register_output(self.op.output_h_th_name_full, vol)
-
-
-class HthMapOperation(CustomExplicitOperation):
-
-    def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('order', default=0)
-        self.parameters.declare('input_h_th_name_design', default='thickness')
-        self.parameters.declare('output_h_th_name_full', default='thickness_full')
-
-    def init_parameters(self):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.order = self.parameters['order']
-        self.input_h_th_name_design = self.parameters['input_h_th_name_design']
-        self.output_h_th_name_full = self.parameters['output_h_th_name_full']
+        self.nonmatching_opt = nonmatching_opt
+        self.order = order
+        self.input_h_th_name_design = input_h_th_name_design
+        self.output_h_th_name_full = output_h_th_name_full
         self.num_splines = self.nonmatching_opt.num_splines
 
         # Only consider constant thickness for now
@@ -65,19 +35,28 @@ class HthMapOperation(CustomExplicitOperation):
         self.output_shape = self.nonmatching_opt.h_th_dof
         self.deriv_mat = self.get_derivative()
 
-    def define(self):
-        self.add_input(self.input_h_th_name_design, shape=self.input_shape,)
-                       # val=self.init_val)
-        self.add_output(self.output_h_th_name_full, shape=self.output_shape)
-        self.declare_derivatives(self.output_h_th_name_full,
-                                 self.input_h_th_name_design,
-                                 val=self.deriv_mat.data,
-                                 rows=self.deriv_mat.row,
-                                 cols=self.deriv_mat.col)
+    def evaluate(self, inputs: csdl.VariableGroup):
+        self.declare_input(self.input_h_th_name_design, inputs.h_th_design)
 
-    def compute(self, inputs, outputs):
-        outputs[self.output_h_th_name_full] = \
-            self.deriv_mat*inputs[self.input_h_th_name_design]
+        h_th_full = self.create_output(self.output_h_th_name_full,
+                    shape=(self.output_shape,))
+        h_th_full.add_name(self.output_h_th_name_full)
+        # output = csdl.VariableGroup()
+        # output.h_th_full = h_th_full
+
+        self.declare_derivative_parameters(self.output_h_th_name_full,
+                                           self.input_h_th_name_design,
+                                           dependent=True)
+
+        return h_th_full
+
+    def compute(self, input_vals, output_vals):
+        output_vals[self.output_h_th_name_full] = \
+            self.deriv_mat*input_vals[self.input_h_th_name_design]
+
+    def compute_derivatives(self, input_vals, output_vals, derivatives):
+        derivatives[self.output_h_th_name_full, 
+                    self.input_h_th_name_design] = self.deriv_mat
 
     def get_derivative(self, coo=True):
         diag_vecs = []
@@ -90,12 +69,28 @@ class HthMapOperation(CustomExplicitOperation):
             return deriv_mat
 
 if __name__ == "__main__":
-    # from GOLDFISH.tests.test_tbeam import nonmatching_opt
+    from GOLDFISH.tests.test_tbeam import nonmatching_opt
     # from GOLDFISH.tests.test_slr import nonmatching_opt
-    from GOLDFISH.tests.test_dRdt import nonmatching_opt
+    # from GOLDFISH.tests.test_dRdt import nonmatching_opt
+
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+
+    h_th_design_name = 'h_th_design'
+    init_val = np.array([np.average(h_th_sub_array) for h_th_sub_array
+                         in nonmatching_opt.init_h_th_list])
+
+    inputs = csdl.VariableGroup()
+    inputs.h_th_design = csdl.Variable(value=init_val, 
+                                        name=h_th_design_name)
 
     m = HthMapModel(nonmatching_opt=nonmatching_opt)
-    m.init_parameters()
-    sim = Simulator(m)
-    sim.run()
-    sim.check_partials(compact_print=True)
+    h_th_full = m.evaluate(inputs)
+    # h_th_full = outputs.h_th_full
+
+    print(h_th_full.value)
+
+    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
+    verify_derivatives_inline([h_th_full], [inputs.h_th_design], 
+                              step_size=1e-6, raise_on_error=False)
+    recorder.stop()
