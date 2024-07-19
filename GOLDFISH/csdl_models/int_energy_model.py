@@ -1,72 +1,27 @@
 from GOLDFISH.nonmatching_opt_ffd import *
 from GOLDFISH.operations.int_energy_exop import *
 
-import csdl
-from csdl import Model, CustomExplicitOperation
-from csdl_om import Simulator
+import csdl_alpha as csdl
 
-class IntEnergyModel(Model):
+class IntEnergyModel(csdl.CustomExplicitOperation):
 
-    def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
-        self.parameters.declare('input_h_th_name', default='thickness')
-        self.parameters.declare('input_u_name', default='displacements')
-        self.parameters.declare('output_wint_name', default='w_int')
+    def __init__(self, nonmatching_opt, input_cp_iga_name_pre='CP_IGA', 
+                 input_h_th_name='h_th', input_u_name='u', 
+                 output_wint_name='w_int'):
+        super().__init__()
+        csdl.check_parameter(nonmatching_opt, 'nonmatching_opt')
+        csdl.check_parameter(input_cp_iga_name_pre, 'input_cp_iga_name_pre')
+        csdl.check_parameter(input_h_th_name, 'input_h_th_name')
+        csdl.check_parameter(input_u_name, 'input_u_name')
+        csdl.check_parameter(output_wint_name, 'output_wint_name')
 
-    def init_parameters(self, wint_regu=None):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
-        self.input_h_th_name = self.parameters['input_h_th_name']
-        self.input_u_name = self.parameters['input_u_name']
-        self.output_wint_name = self.parameters['output_wint_name']
-        self.op = IntEnergyOperation(
-                        nonmatching_opt=self.nonmatching_opt,
-                        input_cp_iga_name_pre=self.input_cp_iga_name_pre, 
-                        input_h_th_name=self.input_h_th_name,
-                        input_u_name=self.input_u_name,
-                        output_wint_name=self.output_wint_name)
-        self.op.init_parameters(wint_regu=wint_regu)
+        self.nonmatching_opt = nonmatching_opt
+        self.input_cp_iga_name_pre = input_cp_iga_name_pre
+        self.input_h_th_name = input_h_th_name
+        self.input_u_name = input_u_name
+        self.output_wint_name = output_wint_name
 
-    def define(self):
-        input_list = []
-        u = self.declare_variable(self.op.input_u_name,
-                                  shape=(self.op.input_u_shape),
-                                  val=self.op.init_disp_array)
-        input_list += [u]
-        if self.op.opt_shape:
-            cp_iga_list = [None for i in range(len(self.op.opt_field))]
-            for i, field in enumerate(self.op.opt_field):
-                cp_iga_list[i] = self.declare_variable(
-                                 self.op.input_cp_iga_name_list[i],
-                                 shape=(self.op.input_cpiga_shape),
-                                 val=self.op.init_cp_iga[:,field])
-            input_list += cp_iga_list
-        if self.op.opt_thickness:
-            h_th = self.declare_variable(self.op.input_h_th_name,
-                   shape=(self.op.input_h_th_shape),
-                   val=self.op.init_h_th)
-            input_list += [h_th]
-        wint = csdl.custom(*input_list, op=self.op)
-        self.register_output(self.op.output_wint_name, wint)
-
-class IntEnergyOperation(CustomExplicitOperation):
-
-    def initialize(self):
-        self.parameters.declare('nonmatching_opt')
-        self.parameters.declare('input_cp_iga_name_pre', default='CP_IGA')
-        self.parameters.declare('input_h_th_name', default='thickness')
-        self.parameters.declare('input_u_name', default='displacement')
-        self.parameters.declare('output_wint_name', default='w_int')
-
-    def init_parameters(self, wint_regu=None):
-        self.nonmatching_opt = self.parameters['nonmatching_opt']
-        self.input_cp_iga_name_pre = self.parameters['input_cp_iga_name_pre']
-        self.input_h_th_name = self.parameters['input_h_th_name']
-        self.input_u_name = self.parameters['input_u_name']
-        self.output_wint_name = self.parameters['output_wint_name']
-
-        self.wint_exop = IntEnergyExOperation(self.nonmatching_opt, wint_regu)
+        self.wint_exop = IntEnergyExOperation(self.nonmatching_opt, wint_regu=None)
 
         self.opt_field = self.nonmatching_opt.opt_field
         self.opt_shape = self.nonmatching_opt.opt_shape
@@ -93,42 +48,48 @@ class IntEnergyOperation(CustomExplicitOperation):
                 self.input_h_th_shape = self.nonmatching_opt.h_th_dof
                 self.init_h_th = self.nonmatching_opt.init_h_th
 
-    def define(self):
-        self.add_output(self.output_wint_name)
-        self.add_input(self.input_u_name, shape=self.input_u_shape,)
-                       # val=self.init_disp_array)
-        self.declare_derivatives(self.output_wint_name, self.input_u_name)
+    def evaluate(self, inputs: csdl.VariableGroup):
+        w_int = self.create_output(self.output_wint_name, (1,))
+        w_int.add_name(self.output_wint_name)
+        # output = csdl.VariableGroup()
+        # output.w_int = w_int
+
+        self.declare_input(self.input_u_name, inputs.u)
+
         if self.opt_shape:
             for i, field in enumerate(self.opt_field):
-                self.add_input(self.input_cp_iga_name_list[i],
-                               shape=self.input_cpiga_shape,)
-                               # val=self.init_cp_iga[:,field])
-                self.declare_derivatives(self.output_wint_name,
-                                      self.input_cp_iga_name_list[i])
+                self.declare_input(self.input_cp_iga_name_list[i],
+                                   inputs.cp_iga[i],)
+                self.declare_derivative_parameters(self.output_wint_name,
+                                      self.input_cp_iga_name_list[i],
+                                      dependent=True)
         if self.opt_thickness:
-            self.add_input(self.input_h_th_name, shape=self.input_h_th_shape)
-            self.declare_derivatives(self.output_wint_name, self.input_h_th_name)
+            self.declare_input(self.input_h_th_name,
+                           inputs.h_th,)
+            self.declare_derivative_parameters(self.output_wint_name,
+                                     self.input_h_th_name,
+                                     dependent=True)
+        return w_int
 
-    def update_inputs(self, inputs):
+    def update_inputs(self, input_vals):
         if self.opt_shape:
             for i, field in enumerate(self.opt_field):
                 self.nonmatching_opt.update_CPIGA(
-                    inputs[self.input_cp_iga_name_list[i]], field)
+                    input_vals[self.input_cp_iga_name_list[i]], field)
         if self.opt_thickness:
             if self.var_thickness:
                 self.nonmatching_opt.update_h_th_IGA(
-                                     inputs[self.input_h_th_name])
+                                     input_vals[self.input_h_th_name])
             else:
-                self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
-            # self.nonmatching_opt.update_h_th(inputs[self.input_h_th_name])
-        self.nonmatching_opt.update_uIGA(inputs[self.input_u_name])
+                self.nonmatching_opt.update_h_th(input_vals[self.input_h_th_name])
+        self.nonmatching_opt.update_uIGA(input_vals[self.input_u_name])
 
-    def compute(self, inputs, outputs):
-        self.update_inputs(inputs)
-        outputs[self.output_wint_name] = self.wint_exop.Wint()
+    def compute(self, input_vals, output_vals):
+        self.update_inputs(input_vals)
+        output_vals[self.output_wint_name] = self.wint_exop.Wint()
 
-    def compute_derivatives(self, inputs, derivatives):
-        self.update_inputs(inputs)
+    def compute_derivatives(self, input_vals, output_vals, derivatives):
+        self.update_inputs(input_vals)
         dwintdu_IGA = self.wint_exop.dWintduIGA(array=True, apply_bcs=True)
         derivatives[self.output_wint_name, self.input_u_name] = dwintdu_IGA
         if self.opt_shape:
@@ -146,8 +107,28 @@ if __name__ == "__main__":
     # from GOLDFISH.tests.test_slr import nonmatching_opt
     from GOLDFISH.tests.test_dRdt import nonmatching_opt
 
+    nonmatching_opt.get_init_CPIGA()
+
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+
+    inputs = csdl.VariableGroup()
+    inputs.cp_iga = []
+    for i, field in enumerate(nonmatching_opt.opt_field):
+        inputs.cp_iga += [csdl.Variable(value=nonmatching_opt.init_cp_iga[i], 
+                                        name='cp_iga'+str(field))]
+
+    inputs.h_th = csdl.Variable(value=nonmatching_opt.init_h_th, name='h_th')
+    inputs.u = csdl.Variable(value=np.random.random(nonmatching_opt.vec_iga_dof),#get_petsc_vec_array(nonmatching_opt.u_iga_nest),
+                            name='u')
+
     m = IntEnergyModel(nonmatching_opt=nonmatching_opt)
-    m.init_parameters()
-    sim = Simulator(m)
-    sim.run()
-    sim.check_partials(compact_print=True)
+    w_int = m.evaluate(inputs)
+    # w_int = outputs.w_int
+
+    print(w_int.value)
+
+    from csdl_alpha.src.operations.derivative.utils import verify_derivatives_inline
+    verify_derivatives_inline([w_int], inputs.cp_iga+[inputs.h_th, inputs.u], 
+                              step_size=1e-6, raise_on_error=False)
+    recorder.stop()
