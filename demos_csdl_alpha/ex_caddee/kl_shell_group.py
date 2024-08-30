@@ -8,7 +8,6 @@ from datetime import datetime
 from igakit.cad import *
 from igakit.io import VTK
 from GOLDFISH.nonmatching_opt_csdl import *
-# from GOLDFISH.nonmatching_opt_om import *
 from PENGoLINS.igakit_utils import *
 
 def return_ik_knots(cd_knot, return_order=False):
@@ -89,9 +88,13 @@ class KLShellModel(object):
                             reparametrize=False, 
                             refine=False)
 
+        # # Compute intersections using pythonocc 
+        # # (raises seg fault in pythonocc7.7.2)
         # self.preprocessor.compute_intersections(
         #                   rtol=1e-6, mortar_refine=2, 
         #                   edge_rel_ratio=1e-3)
+
+        # # Load computed intersection data
         int_data_filename = "wing_int_data.npz"
         self.preprocessor.load_intersections_data(int_data_filename)
 
